@@ -18,6 +18,8 @@ async function main() {
     password: "classbridge",
     port,
     persistent: true,
+    // Dev/test only: the sandbox volume has slow fsync, so durability is relaxed. NEVER use these flags in production.
+    postgresFlags: process.env.PG_DURABLE === "1" ? [] : ["-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"],
     onLog: () => {},
     onError: (e) => console.error(String(e)),
   });
