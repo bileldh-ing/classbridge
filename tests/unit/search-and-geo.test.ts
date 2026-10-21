@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseTeacherSearch, serializeTeacherSearch } from "@/lib/validation/search";
-import { haversineKm, publicPosition, APPROX_GRID_DEG } from "@/lib/geo/approx";
+import { haversineKm, publicPosition, APPROX_GRID_DEG, roundPublicDistanceKm } from "@/lib/geo/approx";
 
 describe("search parameter validation", () => {
   it("coerces and defaults", () => {
@@ -42,5 +42,15 @@ describe("location privacy", () => {
   it("rejects invalid coordinates", () => {
     expect(publicPosition(NaN, 10, "approximate")).toBeNull();
     expect(publicPosition(95, 10, "public")).toBeNull();
+  });
+});
+
+describe("public distance rounding", () => {
+  it("rounds to the nearest 0.5 km", () => {
+    expect(roundPublicDistanceKm(0.2)).toBe(0);
+    expect(roundPublicDistanceKm(1.26)).toBe(1.5);
+    expect(roundPublicDistanceKm(1.74)).toBe(1.5);
+    expect(roundPublicDistanceKm(3.9)).toBe(4);
+    expect(Number.isInteger(roundPublicDistanceKm(7.3) * 2)).toBe(true);
   });
 });

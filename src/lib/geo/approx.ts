@@ -25,3 +25,8 @@ export function haversineKm(a: { lat: number; lng: number }, b: { lat: number; l
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(h));
 }
+
+/** Public distances are rounded to the nearest 0.5 km (never more precise than that). */
+export function roundPublicDistanceKm(km: number): number {
+  return Math.round(km * 2) / 2;
+}

@@ -7,6 +7,7 @@ import { sql, type SQL } from "drizzle-orm";
 import type { DbOrTx } from "../db";
 import type { TeacherSearch } from "../validation/search";
 import { minorUnitDigits } from "../money";
+import { roundPublicDistanceKm } from "../geo/approx";
 
 export type TeacherCard = {
   id: string; slug: string; displayName: string; avatarUrl: string | null; headline: string;
@@ -115,7 +116,7 @@ export async function searchTeachers(db: DbOrTx, s: TeacherSearch, locale = "en"
     ratingAvg: r.rating_avg === null ? null : Number(r.rating_avg), ratingCount: Number(r.rating_count ?? 0),
     city: r.city, country: r.country,
     position: r.pub_lat !== null && r.pub_lng !== null ? { lat: Number(r.pub_lat), lng: Number(r.pub_lng) } : null,
-    distanceKm: r.distance === null ? null : Math.round(Number(r.distance)),
+    distanceKm: r.distance === null ? null : roundPublicDistanceKm(Number(r.distance)),
     minOfferingMinutes: r.min_minutes === null ? null : Number(r.min_minutes),
   }));
   return { items, total: Number(res.rows[0]?.total ?? 0), page: s.page, pageSize: s.pageSize };

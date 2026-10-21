@@ -14,24 +14,29 @@ export function BookingWidget({ offerings, signedIn, viewerTz, slug, isOwn }: { 
   const { t, locale } = useI18n();
   const router = useRouter();
   const [offeringId, setOfferingId] = useState(offerings[0]?.id);
-  const [weekStart, setWeekStart] = useState(() => Date.now());
-  const [slots, setSlots] = useState<number[] | null>(null);
-  const [loadErr, setLoadErr] = useState<string | null>(null);
-  const [picked, setPicked] = useState<number | null>(null);
+  const [minWeek] = useState(() => Date.now());
+  const [weekStart, setWeekStart] = useState(minWeek);
+  const [nonce, setNonce] = useState(0);
+  const reqKey = `${offeringId}:${weekStart}:${nonce}`;
+  const [data, setData] = useState<{ key: string; slots?: number[]; err?: string }>({ key: "" });
+  const [pickedState, setPicked] = useState<{ key: string; ms: number } | null>(null);
+  const picked = pickedState?.key === reqKey ? pickedState.ms : null;
+  const slots = data.key === reqKey ? data.slots ?? null : null;
+  const loadErr = data.key === reqKey ? data.err ?? null : null;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [idemKey] = useState(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`));
+  const [idemKey] = useState(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${minWeek}-${Math.random()}`));
   const intl = locale === "ar" ? "ar-TN" : locale === "fr" ? "fr-FR" : "en-GB";
 
   useEffect(() => {
     if (!offeringId) return;
     let alive = true;
-    setSlots(null); setLoadErr(null); setPicked(null);
+    const key = reqKey;
     api<{ slots: number[] }>(`/api/availability?offeringId=${offeringId}&from=${new Date(weekStart).toISOString()}&to=${new Date(weekStart + 7 * DAY).toISOString()}`)
-      .then((r) => alive && setSlots(r.slots))
-      .catch((e) => alive && setLoadErr(e instanceof ApiError ? e.message : t.common.error));
+      .then((r) => alive && setData({ key, slots: r.slots }))
+      .catch((e) => alive && setData({ key, err: e instanceof ApiError ? e.message : t.common.error }));
     return () => { alive = false; };
-  }, [offeringId, weekStart, t.common.error]);
+  }, [offeringId, weekStart, reqKey, t.common.error]);
 
   const days = useMemo(() => {
     const m = new Map<string, number[]>();
@@ -62,7 +67,7 @@ export function BookingWidget({ offerings, signedIn, viewerTz, slug, isOwn }: { 
         <div className="mb-2 flex items-center justify-between">
           <p className="text-sm font-semibold">{t.booking.chooseTime}</p>
           <div className="flex gap-1">
-            <button type="button" aria-label={t.booking.weekPrev} disabled={weekStart <= Date.now()} className={buttonClass("ghost", "px-2")} onClick={() => setWeekStart((w) => Math.max(Date.now(), w - 7 * DAY))}><ChevronLeft className="size-4 rtl-flip" aria-hidden /></button>
+            <button type="button" aria-label={t.booking.weekPrev} disabled={weekStart <= minWeek} className={buttonClass("ghost", "px-2")} onClick={() => setWeekStart((w) => Math.max(minWeek, w - 7 * DAY))}><ChevronLeft className="size-4 rtl-flip" aria-hidden /></button>
             <button type="button" aria-label={t.booking.weekNext} className={buttonClass("ghost", "px-2")} onClick={() => setWeekStart((w) => w + 7 * DAY)}><ChevronRight className="size-4 rtl-flip" aria-hidden /></button>
           </div>
         </div>
@@ -76,7 +81,7 @@ export function BookingWidget({ offerings, signedIn, viewerTz, slug, isOwn }: { 
               <p className="mb-1 text-xs font-medium text-muted">{new Intl.DateTimeFormat(intl, { timeZone: viewerTz, weekday: "long", day: "numeric", month: "long" }).format(new Date(list[0]))}</p>
               <div className="flex flex-wrap gap-1.5" role="group" aria-label={day}>
                 {list.map((s) => (
-                  <button key={s} type="button" aria-pressed={picked === s} onClick={() => setPicked(s)}
+                  <button key={s} type="button" aria-pressed={picked === s} onClick={() => setPicked({ key: reqKey, ms: s })}
                     className={`rounded-md border px-2.5 py-1 text-sm ${picked === s ? "border-brand-600 bg-brand-600 text-white" : "border-line hover:border-brand-500"}`}>
                     {new Intl.DateTimeFormat(intl, { timeZone: viewerTz, hour: "2-digit", minute: "2-digit" }).format(new Date(s))}
                   </button>
@@ -97,7 +102,7 @@ export function BookingWidget({ offerings, signedIn, viewerTz, slug, isOwn }: { 
             router.push(`/lessons/${r.id}/checkout`);
           } catch (e) {
             setErr(e instanceof ApiError && e.code === "SLOT_UNAVAILABLE" ? t.booking.slotTaken : e instanceof ApiError ? e.message : t.common.error);
-            setWeekStart((w) => w + 0.001); // refetch slots
+            setNonce((n) => n + 1); // refetch slots
             setBusy(false);
           }
         }}>{busy ? t.booking.holding : t.booking.continue}</Button>

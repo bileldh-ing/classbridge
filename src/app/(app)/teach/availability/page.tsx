@@ -21,7 +21,7 @@ export default async function AvailabilityPage() {
       <PageHeader title={t.nav.availability} subtitle="Students only ever see slots generated from these rules minus bookings, buffers, notice and exceptions." />
       <Card><AvailabilityEditor timezone={tp.timezone} initial={rules.map((r) => ({ weekday: r.weekday, startMinute: r.startMinute, endMinute: r.endMinute }))} /></Card>
       <Card><h2 className="mb-3 font-semibold">Exceptions (holidays, time off, extra hours)</h2>
-        <p className="mb-2 text-xs text-muted">Times entered in your browser's local time.</p>
+        <p className="mb-2 text-xs text-muted">Times entered in your browser&apos;s local time.</p>
         <ExceptionForm />
         <ul className="mt-4 space-y-2 text-sm">{exc.map((e) => (
           <li key={e.id} className="flex flex-wrap items-center justify-between gap-2"><span>{e.kind === "blocked" ? "Blocked" : "Extra"}: {fmtDateTime(e.startsAt, tp.timezone, locale)} → {fmtDateTime(e.endsAt, tp.timezone, locale)} {e.reason && `(${e.reason})`}</span>
