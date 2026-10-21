@@ -27,6 +27,7 @@
     "drizzle-orm": "^0.45.4",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
+    "livekit-client": "^2.23.0",
     "livekit-server-sdk": "^2.19.1",
     "lucide-react": "^1.59.0",
     "luxon": "^3.7.2",

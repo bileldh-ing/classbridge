@@ -83,7 +83,7 @@ export async function decideReport(db: DB, actor: Principal, reportId: string, i
   await db.transaction(async (tx) => {
     const [r] = await tx.update(userReports).set({ status: input.status, resolutionNote: input.note }).where(eq(userReports.id, reportId)).returning();
     if (!r) throw new AppError("NOT_FOUND", "Report not found");
-    if (input.hideReview && r.targetType === "review") await tx.update(reviews).set({ status: "hidden" }).where(eq(reviews.id, r.targetId));
+    if (input.hideReview && input.status === "actioned" && r.targetType === "review") await tx.update(reviews).set({ status: "hidden" }).where(eq(reviews.id, r.targetId));
     await audit(tx, { actorId: actor.id, action: `report.${input.status}`, targetType: "user_report", targetId: reportId, reason: input.note, metadata: { hideReview: input.hideReview } });
   });
 }
