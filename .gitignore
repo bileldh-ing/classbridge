@@ -1,0 +1,11 @@
+node_modules
+.next
+.pgdata
+*.log
+.env
+.env.local
+coverage
+test-results
+playwright-report
+next-env.d.ts
+tsconfig.tsbuildinfo

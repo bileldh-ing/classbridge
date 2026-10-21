@@ -1,0 +1,6 @@
+allowBuilds:
+  "@embedded-postgres/linux-arm64": true
+  esbuild: true
+  unrs-resolver: true
+  "@node-rs/argon2": true
+  sharp: true
