@@ -26,7 +26,7 @@ jobs:
       HAS_PLAY_KEY: ${{ secrets.PLAY_STORE_JSON_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -64,7 +64,7 @@ jobs:
       HAS_ASC_KEY: ${{ secrets.APP_STORE_CONNECT_KEY_ID != '' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
