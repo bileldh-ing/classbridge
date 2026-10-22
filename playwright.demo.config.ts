@@ -9,7 +9,7 @@ const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: /demo-tour\.spec\.ts/,
+  testMatch: /demo-tour.*\.spec\.ts/,
   grep: /@demo/,
   workers: 1,
   retries: 0,
