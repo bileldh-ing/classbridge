@@ -29,3 +29,26 @@ ClassBridge has **not** been deployed anywhere. This is the checklist for a firs
 
 ## Before go-live (open items)
 Admin MFA, nonce-based CSP, malware scanning for uploads, guardian/minor flows (keep adult-only until then), real legal texts, e2e tests in CI, accessibility audit, load test. See `HANDOVER.md`.
+
+## Container image & CD
+- `Dockerfile` (multi-stage, Next standalone, non-root uid 1001, healthcheck on `/api/health/live`). Run `node migrate.mjs` once per release before starting `node server.js`.
+- `docker compose up --build` runs postgres:17 → migrate → app locally.
+- Tag `vX.Y.Z` → `cd.yml` builds and pushes `ghcr.io/bileldh-ing/classbridge:{X.Y.Z, X.Y, sha}`, creates a GitHub Release with a conventional-commit changelog, then runs the **deploy** job (environment `production`) if one of these secrets is set:
+  - **Fly.io:** `FLY_API_TOKEN` (+ `fly.toml` with `release_command = "node migrate.mjs"`, `[[http_service.checks]] path = "/api/health/ready"`).
+  - **Render:** `RENDER_DEPLOY_HOOK_URL` (image-backed service; pre-deploy command `node migrate.mjs`).
+  - **Vercel:** `VERCEL_TOKEN` (+ project linked; run migrations from CI before deploy; SSE/LISTEN needs a long-lived Node runtime, so prefer a container host for realtime).
+- Readiness: point load balancers at `/api/health/ready` (503 until DB reachable and migrations applied); liveness at `/api/health/live`.
+
+## Required production environment
+`DATABASE_URL`, `APP_URL` (https), `AUTH_SECRET` (≥32 random chars), `STORAGE_DIR` (persistent volume) — plus optional `SENTRY_DSN`/`SENTRY_ENVIRONMENT`, `LOG_LEVEL`, `ADMIN_MFA_REQUIRED` (default true in production), provider keys (Stripe, LiveKit, Mapbox, Resend). Staff must enrol TOTP at `/mfa` on first admin visit.
+
+## Mobile (Play Store / App Store) {#mobile}
+- PWA: installable from the browser (manifest + service worker + offline page).
+- Native shells: `capacitor.config.ts` loads `CAP_SERVER_URL` (repository variable). `mobile.yml` builds a debug APK (artifact `classbridge-android-debug-apk`) and an unsigned iOS simulator build.
+- Store lanes (`fastlane/Fastfile`), run via `mobile.yml` → *Run workflow* with `release=true`:
+  - Android `internal`: secrets `PLAY_STORE_JSON_KEY`, `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
+  - iOS `beta` (TestFlight): `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_KEY_P8_BASE64`, `MATCH_GIT_URL`, `MATCH_PASSWORD`, `APPLE_TEAM_ID`.
+- Store review note: the apps wrap the web product; keep native value (push notifications, deep links) on the roadmap to satisfy App Store guideline 4.2.
+
+## Release automation
+`release-please.yml` maintains a release PR + `CHANGELOG.md` from conventional commits once enabled: turn on *Settings → Actions → Allow GitHub Actions to create and approve pull requests* and set repository variable `RELEASE_PLEASE_ENABLED=true`.

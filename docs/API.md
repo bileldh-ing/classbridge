@@ -110,4 +110,39 @@ Example: `GET /api/search/teachers?subject=mathematics&mode=in_person&city=Tunis
 | POST | /api/admin/refunds/:id/submit | admin.manage_refunds | – (send/retry refund at provider) |
 | POST | /api/admin/reports/:id | admin.manage_reports | `{status,note,hideReview}` |
 
+## Added in 0003 (production build)
+Errors use the same envelope; new code `MFA_REQUIRED` (403) when a staff permission is used without a TOTP-verified session.
+
+| Method | Path | Auth | Body | Notes |
+|---|---|---|---|---|
+| POST | /api/bookings/:id/reschedule | participant | `{startsAt, reason}` | confirmed 1:1 only; student ≥24 h, teacher ≥2 h; max 2; atomic; 409 `SLOT_UNAVAILABLE` |
+| GET/POST | /api/teacher/group-sessions | teacher | `{offeringId, startsAt}` | flag `group_lessons`; offering type `group`; no overlap with 1:1 or other sessions |
+| POST | /api/group-sessions/:id/seats | learn.book | `{timezone}` | capacity under row lock; returns `{id, redirect}` to checkout; 409 when full / duplicate |
+| GET/POST | /api/support/tickets | session | `{subject, body, category, bookingId?}` | 5/h per user; booking must be visible to the requester |
+| GET | /api/support/tickets/:id | requester or staff | – | internal notes only for staff |
+| POST | /api/support/tickets/:id/replies | requester or staff | `{body, internal}` | `internal:true` staff only (TOTP) |
+| POST | /api/admin/support/:id | support.manage_tickets | `{status?, assignToMe?, reason}` | audited |
+| POST | /api/admin/flags/:key | admin.manage_flags | `{enabled, reason}` | audited |
+| GET/POST | /api/admin/taxonomy/categories[/:id] | admin.manage_subjects | category schema | slug unique |
+| POST | /api/admin/taxonomy/subjects[/:id] | admin.manage_subjects | subject schema | |
+| POST | /api/admin/courses/:id/moderate | admin.moderate_content | `{action:"unpublish"\|"restore", reason}` | owner notified |
+| POST | /api/admin/teachers/:id/moderate | admin.moderate_content | `{action:"suspend"\|"reinstate", reason}` | |
+| GET/POST | /api/guardian/links | session | `{learnerEmail, canViewBookings, canViewProgress}` | flag `guardian_links`; consent token only emailed/notified to the learner |
+| POST | /api/guardian/consent | learner (email must match) | `{token, decision}` | records consent with policy version |
+| POST | /api/guardian/links/:id/revoke | guardian or learner | – | |
+| POST | /api/teacher/courses/:id/assignments | owner | `{title, instructions, maxPoints, dueAt?, lessonId?}` | |
+| GET | /api/courses/:id/assignments | owner or enrolled | – | learners see only their own submission |
+| POST | /api/assignments/:id/submissions | enrolled | `{body}` | replace until graded |
+| POST | /api/submissions/:id/grade | owner | `{points, feedback}` | appends to grading history |
+| GET | /api/submissions/:id/grades | learner or owner | – | full history |
+| GET/POST | /api/course-lessons/:id/note | lesson access | `{body}` | private |
+| POST | /api/course-lessons/:id/bookmark | lesson access | `{on}` | |
+| POST | /api/teacher/courses/:id/announcements | owner | `{title, body}` | notifies active learners; 10/day |
+| GET | /api/courses/:id/announcements | owner or enrolled | – | |
+| POST | /api/conversations/:id/attachments | member | multipart `file`, `caption?` | PDF/PNG/JPEG/WebP by magic bytes, ≤5 MB |
+| GET | /api/attachments/:id | member | – | `attachment`, `nosniff`, sandbox CSP, no-store |
+| GET | /api/conversations/:id/stream | member | – | `text/event-stream`: `ready`, `message {messageId}` |
+| POST | /api/auth/mfa/setup · /enable · /verify | staff session | `{code}` | TOTP RFC 6238; 10 attempts / 5 min |
+| GET | /api/health/live · /api/health/ready | public | – | ready = DB reachable + all migrations applied (503 otherwise) |
+
 OpenAPI generation is **not implemented**; the Zod schemas referenced above (in `src/lib/services/*` and `src/lib/validation/*`) are the source of truth.

@@ -37,13 +37,21 @@
 - Logs are structured JSON with key-based redaction of passwords/tokens/secrets/cookies/signatures; message bodies are not logged.
 - Privacy requests (export/deletion) are recorded (`privacy_requests`) for staff handling; deletion request deactivates the account immediately. Financial records (orders, ledger, payment events) must be retained per accounting law and are excluded from deletion. **Automated export/erasure jobs are not implemented.**
 
+## Hardening in place (22 Oct 2026)
+- **Staff 2FA:** TOTP (RFC 6238) for admin/support; secret AES-256-GCM encrypted at rest (key derived from `AUTH_SECRET`), replay-protected, verified per session; staff permissions return `MFA_REQUIRED` until verified. Required by default in production (`ADMIN_MFA_REQUIRED`).
+- **CSP:** per-request nonce + `strict-dynamic` for scripts (no `unsafe-inline`/`unsafe-eval` in production), `frame-ancestors 'none'`, `object-src 'none'`, `upgrade-insecure-requests` on HTTPS; APIs get `default-src 'none'`. Plus HSTS (https), XFO DENY, nosniff, COOP/CORP, Permissions-Policy.
+- **Admin pages:** non-staff receive a real HTTP 403 (`forbidden()`); APIs 401/403 as before.
+- **Uploads:** credentials and message attachments are type-checked by magic bytes, size-capped (5 MiB), stored under random keys in private storage, served only through membership/ownership-checked routes as sandboxed attachments.
+- **Rate limits:** login, signup, booking, messages, tickets, replies, MFA, guardian requests, announcements (Postgres fixed window, multi-instance safe).
+- **Monitoring:** optional Sentry-compatible reporting with PII scrubbing (no query strings, cookies, bodies; emails masked; sensitive keys redacted); structured JSON logs with request ids.
+- **Guardians & minors:** guardian access only after the learner's explicit consent (recorded with policy version), read-only and revocable; minors' accounts stay disabled (`minor_accounts` flag off; signup is 18+).
+
 ## Known gaps (must close before production)
-1. CSP uses `'unsafe-inline'` for scripts (Next.js bootstrap) — move to nonce-based CSP.
-2. Admin MFA is not implemented.
-3. No malware scanning for uploads; local-disk storage adapter (use S3/Supabase Storage with signed URLs).
-4. No error-monitoring integration (Sentry etc.).
-5. Rate limiter is a fixed window in Postgres (fine for moderate traffic; consider Redis).
-6. Legal texts are placeholders.
+- Malware scanning of uploads (hook point: `putPrivateFile` in `src/lib/storage.ts`; e.g. ClamAV sidecar or provider scanning).
+- Local-disk storage: implement an S3/R2 adapter with short-lived signed URLs for multi-instance deployments.
+- `style-src 'unsafe-inline'` remains (inline style attributes from React/Leaflet); scripts are nonce-only.
+- Legal texts are placeholders; DPA/processor list to be written per launch country.
+- Data export/erasure requests are recorded but processed manually.
 
 ## Incident response (outline)
 Revoke sessions (`UPDATE sessions SET revoked_at = now()`), rotate `AUTH_SECRET`/provider keys, suspend affected accounts via admin UI (audited), export `audit_log` and `provider_webhook_events` for investigation, notify users/regulators as required.
