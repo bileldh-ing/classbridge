@@ -12,9 +12,10 @@ test.describe("visitor: search → teacher profile", () => {
     await expect(page).toHaveURL(/\/teachers\/amira-demo-1/);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Amira B.");
     await expect(page.getByText("Book a lesson")).toBeVisible();
-    // Unpublished (pending) teachers are not public.
-    const pending = await page.goto("/teachers/pierre-demo-8");
-    expect(pending?.status()).toBe(404);
+    // Unknown or unpublished teachers are a real 404 (pending profiles are covered by integration tests;
+    // the seeded pending teacher may already be approved by admin.spec.ts in the same run).
+    const missing = await page.goto("/teachers/no-such-teacher-e2e");
+    expect(missing?.status()).toBe(404);
   });
 
   test("map view renders the list alternative and approximate markers", async ({ page }) => {
