@@ -33,7 +33,7 @@ export const Runs: React.FC = () => {
               <div style={{ width: 30, height: 30, borderRadius: 15, background: "rgba(35,134,54,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}><Check size={18} color="#3fb950" /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: inter, fontWeight: 700, fontSize: 21, color: "#e6edf3", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</div>
-                <div style={{ fontFamily: inter, fontSize: 16, color: "#7d8590", marginTop: 3 }}><b style={{ color: "#c9d1d9" }}>{r.workflow}</b> #{r.number}: {r.event === "push" ? "Commit" : r.event} {r.sha.slice(0, 7)} by {r.actor}</div>
+                <div style={{ fontFamily: inter, fontSize: 16, color: "#7d8590", marginTop: 3 }}><b style={{ color: "#c9d1d9" }}>{r.workflow}</b> #{r.number}: {r.event === "push" ? `Commit ${r.sha.slice(0, 7)} pushed by ${r.actor}` : r.event === "workflow_dispatch" ? `Manually run by ${r.actor} on ${r.sha.slice(0, 7)}` : `${r.event} · ${r.sha.slice(0, 7)}`}</div>
               </div>
               <div style={{ fontFamily: mono, fontSize: 15, color: "#58a6ff", background: "rgba(56,139,253,0.12)", padding: "4px 12px", borderRadius: 999, flex: "none" }}>{r.branch}</div>
               <div style={{ width: 180, textAlign: "right", fontFamily: inter, fontSize: 16, color: "#7d8590", flex: "none" }}>{date(r.created)}<br />{dur(r.seconds)}</div>

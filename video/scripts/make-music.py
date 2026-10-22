@@ -19,7 +19,7 @@ def hz(m):
     return 440.0 * 2 ** ((m - 69) / 12)
 
 def add(sig, start, pan=0.0, gain=1.0):
-    i = int(start * SR)
+    i = max(0, int(start * SR))
     if i >= n: return
     sig = sig[: n - i]
     L[i:i + len(sig)] += sig * gain * np.sqrt(0.5 * (1 - pan))
