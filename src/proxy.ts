@@ -11,6 +11,7 @@ export function proxy(request: NextRequest) {
     // `next dev` needs eval + websocket HMR; `next start` (production) never does.
     dev: process.env.NODE_ENV === "development",
     livekitUrl: process.env.LIVEKIT_URL,
+    https: (process.env.APP_URL ?? "").startsWith("https://"),
   });
   const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
   const headers = new Headers(request.headers);

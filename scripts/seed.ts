@@ -15,6 +15,7 @@ import { loadEnvFile } from "./load-env";
 import * as s from "../src/lib/db/schema";
 import { hashPassword } from "../src/lib/auth/password";
 import { platformFee } from "../src/lib/money";
+import { base32Encode, encryptSecret } from "../src/lib/auth/totp";
 
 loadEnvFile();
 if (process.env.NODE_ENV === "production") { console.error("Refusing to seed demo data in production."); process.exit(1); }
@@ -23,6 +24,9 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL ?? "postgres:
 const db = drizzle(pool, { schema: s });
 const DEMO_PASSWORD = "DemoPass123!";
 const room = () => `cb-${randomBytes(12).toString("base64url")}`;
+/** DEMO ONLY: fixed TOTP secret for the seeded staff accounts so local demos and e2e tests can pass the 2FA step. */
+const DEMO_TOTP_SECRET = base32Encode(Buffer.from("classbridge-demo-otp"));
+const AUTH_SECRET = process.env.AUTH_SECRET ?? "dev-only-insecure-secret-change-me-000000";
 
 const CATEGORIES = [
   { slug: "languages", nameEn: "Languages", nameFr: "Langues", nameAr: "اللغات", sortOrder: 1 },
@@ -89,7 +93,10 @@ async function main() {
   }
 
   const admin = await user("admin@classbridge.test", "Admin (Demo)", ["admin", "student"], "Africa/Tunis");
-  await user("support@classbridge.test", "Support Agent (Demo)", ["support"], "Africa/Tunis");
+  const support = await user("support@classbridge.test", "Support Agent (Demo)", ["support"], "Africa/Tunis");
+  for (const staff of [admin, support]) {
+    await db.update(s.users).set({ totpSecretEnc: encryptSecret(DEMO_TOTP_SECRET, AUTH_SECRET), totpEnabledAt: new Date() }).where(eq(s.users.id, staff.id));
+  }
   const student = await user("student@classbridge.test", "Lina S. (Demo student)", ["student"], "Africa/Tunis", "fr");
   const student2 = await user("student2@classbridge.test", "Omar H. (Demo student)", ["student"], "Europe/Paris");
 
@@ -190,13 +197,36 @@ async function main() {
 
   await db.insert(s.featureFlags).values([
     { key: "ai_features", enabled: false, description: "Optional AI assistants (off by default; no provider configured)" },
-    { key: "group_lessons", enabled: false, description: "Group lesson booking (not implemented in this build)" },
+    { key: "group_lessons", enabled: true, description: "Group lessons: teachers schedule sessions with capacity, students book seats" },
+    { key: "guardian_links", enabled: true, description: "Parent/guardian linking with learner consent and read-only permissions" },
+    { key: "minor_accounts", enabled: false, description: "Accounts for learners under 18 (keep OFF until safeguarding policy is approved)" },
+    { key: "realtime_messaging", enabled: true, description: "Server-sent events push for new messages" },
+  ]);
+
+  // Demo group lesson: Lucas runs a free French conversation circle (capacity 6) in 3 days at 18:00 Paris time.
+  const lucas = teacherIds["lucas.demo@classbridge.test"];
+  const [groupOffering] = await db.insert(s.lessonOfferings).values({ teacherId: lucas.id, subjectId: subjRows.find((x) => x.slug === "french")!.id, type: "group", title: "French conversation circle (Demo group)", description: "Small-group speaking practice, max 6 learners.", durationMinutes: 60, priceMinor: 0, currency: "EUR", mode: "online", capacity: 6, status: "published", cancellationPolicy: "flex-24h-v1" }).returning();
+  const groupStart = now.setZone(lucas.tz).plus({ days: 3 }).set({ hour: 18, minute: 0, second: 0, millisecond: 0 });
+  await db.insert(s.groupSessions).values({ teacherId: lucas.id, offeringId: groupOffering.id, startsAt: groupStart.toUTC().toJSDate(), endsAt: groupStart.plus({ minutes: 60 }).toUTC().toJSDate(), capacity: 6, roomName: `cbg-${randomBytes(12).toString("base64url")}` });
+
+  // Demo assignment + announcement on the Python course, and an enrollment for the demo student.
+  await db.insert(s.courseEnrollments).values({ courseId: course.id, userId: student.id, source: "free" });
+  await db.insert(s.assignments).values({ courseId: course.id, title: "Write a FizzBuzz function (Demo)", instructions: "Write a function fizzbuzz(n) that returns 'Fizz', 'Buzz', 'FizzBuzz' or the number. Paste your code and explain your loop.", maxPoints: 10 });
+  await db.insert(s.courseAnnouncements).values({ courseId: course.id, authorId: sara.userId, title: "Welcome (Demo)", body: "Welcome to the demo course! Post questions in messages any time." });
+
+  // Demo support ticket with a public reply and an internal note.
+  const [ticket] = await db.insert(s.supportTickets).values({ userId: student.id, subject: "How do I join my trial lesson? (Demo)", body: "Where is the classroom button?", category: "technical", status: "pending" }).returning();
+  await db.insert(s.supportTicketMessages).values([
+    { ticketId: ticket.id, authorId: student.id, body: "Where is the classroom button?" },
+    { ticketId: ticket.id, authorId: support.id, body: "Internal: user has a confirmed trial lesson; join window opens 10 min before.", isInternal: true },
+    { ticketId: ticket.id, authorId: support.id, body: "Hi! The classroom button appears on the lesson page 10 minutes before the start." },
   ]);
   await db.insert(s.auditLog).values({ actorId: admin.id, action: "seed.demo_data_loaded", targetType: "system", reason: "Development seed", metadata: { teachers: TEACHERS.length } });
 
   console.log(`Seed complete. Demo accounts (password "${DEMO_PASSWORD}", development only):`);
   console.log("  admin@classbridge.test (admin), support@classbridge.test (support), student@classbridge.test, student2@classbridge.test");
   console.log("  teachers: " + TEACHERS.map((t) => t.email).join(", "));
+  console.log(`  staff TOTP secret (demo only, add to an authenticator app): ${DEMO_TOTP_SECRET}`);
   await pool.end();
 }
 main().catch(async (e) => { console.error(e); await pool.end(); process.exit(1); });

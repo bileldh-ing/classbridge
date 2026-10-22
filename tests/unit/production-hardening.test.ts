@@ -76,12 +76,13 @@ describe("uploads", () => {
 
 describe("content security policy", () => {
   it("uses a per-request nonce with strict-dynamic and no unsafe-inline/eval for scripts in production", () => {
-    const csp = buildCsp("abc123", { dev: false, livekitUrl: "wss://lk.example.com" });
+    const csp = buildCsp("abc123", { dev: false, livekitUrl: "wss://lk.example.com", https: true });
     expect(csp).toContain("script-src 'self' 'nonce-abc123' 'strict-dynamic'");
     expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/);
     expect(csp).not.toMatch(/script-src[^;]*unsafe-eval/);
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("wss://lk.example.com");
     expect(csp).toContain("upgrade-insecure-requests");
+    expect(buildCsp("n", { dev: false })).not.toContain("upgrade-insecure-requests");
   });
 });

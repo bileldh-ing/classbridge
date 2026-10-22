@@ -4,3 +4,4 @@ allowBuilds:
   unrs-resolver: true
   "@node-rs/argon2": true
   sharp: true
+  "@embedded-postgres/linux-x64": true

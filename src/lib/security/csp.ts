@@ -5,7 +5,7 @@
  * cannot execute script, and adding a nonce here would make browsers ignore 'unsafe-inline'.
  * Edge-safe: no Node imports.
  */
-export function buildCsp(nonce: string, opts: { dev: boolean; livekitUrl?: string }) {
+export function buildCsp(nonce: string, opts: { dev: boolean; livekitUrl?: string; https?: boolean }) {
   const lk = opts.livekitUrl ?? "";
   const connect = ["'self'", lk, lk.replace(/^wss:/, "https:"), "https://checkout.stripe.com"].filter(Boolean);
   if (opts.dev) connect.push("ws:", "wss:");
@@ -26,7 +26,8 @@ export function buildCsp(nonce: string, opts: { dev: boolean; livekitUrl?: strin
     "form-action 'self' https://checkout.stripe.com",
     "object-src 'none'",
   ];
-  if (!opts.dev) directives.push("upgrade-insecure-requests");
+  // Only when served over HTTPS: on plain-http hosts (local e2e) it would break same-origin asset loads.
+  if (!opts.dev && opts.https) directives.push("upgrade-insecure-requests");
   return directives.join("; ");
 }
 
