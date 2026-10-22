@@ -3,7 +3,7 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule: { interval: weekly, day: monday }
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 3
     groups:
       next-react: { patterns: ["next", "react", "react-dom", "eslint-config-next", "@types/react*"] }
       capacitor: { patterns: ["@capacitor/*"] }
