@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.0 (2026-10-22)
+
+
+### Bug Fixes
+
+* **ci:** mobile e2e device without browser override; allow embedded-postgres darwin builds ([5b8b84b](https://github.com/bileldh-ing/classbridge/commit/5b8b84b0980d570d577dbb7033292dc2aa66c171))
+* **group-lessons:** explicit duplicate-seat check before the student overlap constraint ([6533e21](https://github.com/bileldh-ing/classbridge/commit/6533e217d7ddfaa3598a72c2443c5159d78ff5b2))
+
+## Changelog
+
 All notable changes are documented here. Entries are generated from conventional commits by release-please.
 
 ## Unreleased
