@@ -2,6 +2,10 @@ name: Demo video
 
 on:
   workflow_dispatch:
+    inputs:
+      pause_ms:
+        description: "Hold time per caption/step in ms (longer = calmer pacing for the edited video)"
+        default: "3000"
 
 permissions:
   contents: read
@@ -27,6 +31,7 @@ jobs:
       AUTH_SECRET: ci-only-auth-secret-0123456789abcdef0123456789
       E2E_NO_SERVER: "1"
       NEXT_TELEMETRY_DISABLED: "1"
+      DEMO_PAUSE_MS: ${{ inputs.pause_ms || '1600' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

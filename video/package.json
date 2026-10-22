@@ -1,0 +1,23 @@
+{
+  "name": "classbridge-demo-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare-scenes": "node scripts/prepare.mjs",
+    "music": "python3 scripts/make-music.py",
+    "studio": "remotion studio",
+    "render": "remotion render ClassBridgeDemo out/classbridge-demo.mp4 --codec=h264 --audio-codec=aac --crf=20 --pixel-format=yuv420p"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.537",
+    "@remotion/google-fonts": "4.0.537",
+    "@remotion/transitions": "4.0.537",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.537"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "typescript": "^5.9.0"
+  }
+}

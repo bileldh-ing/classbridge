@@ -1,0 +1,67 @@
+name: Render video
+
+# Edits the recorded demo scenes (artifact `demo-scenes` from the "Demo video" workflow) into the final
+# JSM-style tutorial with Remotion (video/), and uploads the MP4s as artifact `classbridge-demo-mp4`.
+on:
+  workflow_dispatch:
+    inputs:
+      scenes_run_id:
+        description: "Run id of the 'Demo video' workflow whose demo-scenes artifact to use"
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  render:
+    name: Render demo video (Remotion)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: video
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          name: demo-scenes
+          path: demo-scenes
+          run-id: ${{ inputs.scenes_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: System packages (ffmpeg, Chrome deps)
+        working-directory: .
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg python3-numpy libnss3 libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libgbm1 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 libcups2 fonts-noto-core || true
+          ls -la demo-scenes
+      - run: npm install --no-audit --no-fund
+      - name: Convert scenes + manifest
+        run: SCENES_DIR=../demo-scenes node scripts/prepare.mjs
+      - name: Real workflow runs for the CI/CD segment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/actions/runs?status=success&per_page=60" | jq '{runs: [.workflow_runs[] | select(.name != "Render video") |
+            {workflow: .name, title: .display_title, number: .run_number, branch: .head_branch, event: .event, sha: .head_sha,
+             actor: .actor.login, created: .created_at, conclusion: .conclusion,
+             seconds: ((.updated_at | fromdateiso8601) - (.run_started_at | fromdateiso8601))}] | .[:7]}' > src/generated/runs.json
+          cat src/generated/runs.json
+      - name: Music bed (self-generated, royalty-free)
+        run: python3 scripts/make-music.py 540
+      - run: npx remotion browser ensure
+      - name: Render 1080p
+        run: npx remotion render ClassBridgeDemo out/classbridge-demo.mp4 --codec=h264 --audio-codec=aac --crf=20 --pixel-format=yuv420p --concurrency=4 --timeout=120000
+      - name: 720p copy + stills
+        run: |
+          ffmpeg -y -v error -i out/classbridge-demo.mp4 -vf scale=1280:720 -c:v libx264 -preset slow -crf 23 -c:a aac -b:a 128k -movflags +faststart out/classbridge-demo-720p.mp4
+          ffprobe -v error -show_entries format=duration,size -of default=nw=1 out/classbridge-demo.mp4
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: classbridge-demo-mp4
+          path: video/out/*.mp4
+          retention-days: 30
