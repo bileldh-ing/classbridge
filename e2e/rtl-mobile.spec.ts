@@ -11,7 +11,9 @@ test("Arabic pages render right-to-left", async ({ page, context, baseURL }) => 
 });
 
 test.describe("mobile viewport", () => {
-  test.use({ ...devices["Pixel 7"] });
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { defaultBrowserType, ...pixel } = devices["Pixel 7"];
+  test.use(pixel);
   test("home and search fit the screen without horizontal scrolling; PWA manifest is linked", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("h1")).toBeVisible();
