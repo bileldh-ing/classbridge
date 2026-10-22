@@ -22,6 +22,8 @@ jobs:
   android:
     name: Android debug APK
     runs-on: ubuntu-latest
+    env:
+      HAS_PLAY_KEY: ${{ secrets.PLAY_STORE_JSON_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -44,7 +46,7 @@ jobs:
           name: classbridge-android-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
       - name: Play Store internal track (secrets-gated)
-        if: inputs.release && env.PLAY_JSON_KEY != ''
+        if: inputs.release && env.HAS_PLAY_KEY == 'true'
         env:
           PLAY_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -58,6 +60,8 @@ jobs:
   ios:
     name: iOS unsigned build
     runs-on: macos-latest
+    env:
+      HAS_ASC_KEY: ${{ secrets.APP_STORE_CONNECT_KEY_ID != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -79,7 +83,7 @@ jobs:
           name: classbridge-ios-simulator-app
           path: ClassBridge-simulator.app.zip
       - name: TestFlight (secrets-gated)
-        if: inputs.release && env.ASC_KEY_ID != ''
+        if: inputs.release && env.HAS_ASC_KEY == 'true'
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
