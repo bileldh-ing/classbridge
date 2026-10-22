@@ -13,6 +13,8 @@ import { formatMoney } from "@/lib/money";
 import { POLICIES, isPolicyId } from "@/lib/policy/cancellation";
 import { Avatar, Badge, Card, DemoBadge, Alert } from "@/components/ui";
 import { BookingWidget } from "@/components/teachers/booking-widget";
+import { isEnabled } from "@/lib/services/flags";
+import { listGroupSessions } from "@/lib/services/group-lessons";
 import { ReportButton } from "@/components/client/report-button";
 import { ActionButton } from "@/components/client/action-button";
 import { fmtDateTime } from "@/lib/time";
@@ -35,7 +37,9 @@ export default async function TeacherPage({ params }: { params: Promise<{ slug: 
   const viewerTz = user?.timezone ?? "UTC";
   const saved = user ? (await db.select().from(savedTeachers).where(and(eq(savedTeachers.userId, user.id), eq(savedTeachers.teacherId, tp.id)))).length > 0 : false;
   const policy = isPolicyId(tp.cancellationPolicy) ? POLICIES[tp.cancellationPolicy] : null;
-  const offerings = tp.offerings.map((o) => ({ id: o.id, title: o.title, description: o.description, durationMinutes: o.durationMinutes, mode: o.mode, type: o.type,
+  const groupOn = await isEnabled(db, "group_lessons");
+  const groupSessions = groupOn ? await listGroupSessions(db, tp.id) : [];
+  const offerings = tp.offerings.filter((o) => o.type !== "group").map((o) => ({ id: o.id, title: o.title, description: o.description, durationMinutes: o.durationMinutes, mode: o.mode, type: o.type,
     priceLabel: o.priceMinor === 0 ? t.common.free : formatMoney(o.priceMinor, o.currency, locale) }));
 
   return (
@@ -94,6 +98,17 @@ export default async function TeacherPage({ params }: { params: Promise<{ slug: 
         <Card>
           <h2 className="mb-4 text-lg font-semibold">{t.teacher.book}</h2>
           <BookingWidget offerings={offerings} signedIn={!!user} viewerTz={viewerTz} slug={tp.slug} isOwn={user?.id === tp.userId} />
+          {groupSessions.length > 0 && (
+            <section aria-labelledby="group-h" className="mt-4 rounded-xl border border-line p-4" data-testid="group-sessions">
+              <h2 id="group-h" className="mb-2 font-semibold">Group sessions</h2>
+              <ul className="space-y-2 text-sm">{groupSessions.map((g) => (
+                <li key={g.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span>{g.title} · {fmtDateTime(g.startsAt, viewerTz, locale)} · {g.priceMinor === 0 ? t.common.free : formatMoney(g.priceMinor, g.currency, locale)} · {g.seatsLeft} seats left</span>
+                  {user && user.id !== tp.userId && g.seatsLeft > 0 ? <ActionButton endpoint={`/api/group-sessions/${g.id}/seats`} body={{ timezone: viewerTz }} label="Book a seat" variant="secondary" />
+                    : !user ? <a className="underline" href={`/signin?next=/teachers/${tp.slug}`}>{t.nav.signIn}</a> : null}
+                </li>))}</ul>
+            </section>
+          )}
           {policy && <div className="mt-4 border-t border-line pt-3 text-xs text-muted"><p className="font-medium text-ink">{t.teacher.cancellation}</p><p>{policy.summary}</p></div>}
         </Card>
       </aside>

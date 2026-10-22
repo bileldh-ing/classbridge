@@ -80,6 +80,9 @@ export async function createBooking(db: DB, actor: Principal, input: z.infer<typ
         .innerJoin(teacherProfiles, eq(teacherProfiles.id, lessonOfferings.teacherId)).where(eq(lessonOfferings.id, input.offeringId));
       if (!row || row.o.status !== "published" || row.t.publishState !== "published") throw new AppError("NOT_FOUND", "This lesson is not available.");
       if (row.t.userId === actor.id) throw new AppError("NOT_ELIGIBLE", "You cannot book your own lesson.");
+      if (row.o.type === "group") throw new AppError("NOT_ELIGIBLE", "Group lessons are booked by choosing a scheduled session.");
+      // Serialise slot decisions per teacher (1:1 bookings, reschedules and group sessions share this lock).
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${row.t.id}))`);
       await expireStaleHolds(tx, { teacherId: row.t.id, studentId: actor.id });
       const start = input.startsAt;
       const end = new Date(start.getTime() + row.o.durationMinutes * 60_000);

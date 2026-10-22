@@ -8,7 +8,7 @@ import { allowed, Denied } from "../guard";
 
 export default async function AdminUsers({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const user = await requireUserPage("/admin/users");
-  if (!allowed(user, "admin.manage_users")) return <Denied />;
+  if (!allowed(user, "admin.manage_users")) Denied();
   const { q } = await searchParams;
   const db = getDb();
   const like = q ? `%${q.replace(/[%_\\]/g, (m) => `\\${m}`).slice(0, 80)}%` : null;

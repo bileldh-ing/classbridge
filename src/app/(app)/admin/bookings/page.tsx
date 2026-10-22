@@ -9,7 +9,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 export default async function AdminBookings() {
   const user = await requireUserPage("/admin/bookings");
-  if (!allowed(user, "admin.view_payments")) return <Denied />;
+  if (!allowed(user, "admin.view_payments")) Denied();
   const tprof = alias(profiles, "tprof");
   const rows = await getDb().select({ b: bookings, title: lessonOfferings.title, student: profiles.displayName, teacher: tprof.displayName, events: sql<number>`(SELECT count(*)::int FROM booking_events e WHERE e.booking_id = ${bookings.id})` })
     .from(bookings).innerJoin(lessonOfferings, eq(lessonOfferings.id, bookings.offeringId)).innerJoin(profiles, eq(profiles.userId, bookings.studentId))

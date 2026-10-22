@@ -1,12 +1,14 @@
-import { requireUserPage } from "@/lib/auth/session";
+import { forbidden, redirect } from "next/navigation";
+import { needsMfa, requireUserPage } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
-import { getI18n } from "@/lib/i18n/server";
-import { Alert } from "@/components/ui";
 
-/** Admin area guard (server-side). Individual pages/actions re-check finer permissions. */
+/**
+ * Admin area guard (server-side, before any streaming): non-staff get a real HTTP 403; staff without a TOTP-verified
+ * session (required in production) are sent to /mfa. Individual pages/actions re-check finer permissions.
+ */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUserPage("/admin");
-  const { t } = await getI18n();
-  if (!can(user, "admin.view_dashboard")) return <Alert tone="error" title={t.common.forbidden}>This area is restricted to platform staff.</Alert>;
+  if (!can(user, "admin.view_dashboard")) forbidden();
+  if (needsMfa(user, "admin.view_dashboard")) redirect("/mfa");
   return <>{children}</>;
 }

@@ -6,6 +6,7 @@ import { reviewEligibility } from "@/lib/services/reviews";
 import { getI18n } from "@/lib/i18n/server";
 import { isAppError } from "@/lib/errors";
 import { LessonView } from "@/components/lessons/lesson-view";
+import { LessonExtras } from "@/components/lessons/reschedule-card";
 import { Alert } from "@/components/ui";
 import { reviews } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -22,5 +23,5 @@ export default async function LessonPage({ params, searchParams }: { params: Pro
   const reviewed = (await db.select({ id: reviews.id }).from(reviews).where(eq(reviews.bookingId, id))).length > 0;
   const banner = sp.confirmed ? <Alert tone="success">{t.booking.confirmed}</Alert>
     : sp.checkout === "success" ? <Alert tone="info">Payment submitted. Your lesson is confirmed as soon as the payment provider verifies it — refresh in a moment.</Alert> : undefined;
-  return <LessonView d={d} user={user} t={t} locale={locale} canReview={el.eligible} reviewed={reviewed && d.viewerRole === "student"} banner={banner} />;
+  return <><LessonView d={d} user={user} t={t} locale={locale} canReview={el.eligible} reviewed={reviewed && d.viewerRole === "student"} banner={banner} /><LessonExtras d={d} /></>;
 }

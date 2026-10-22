@@ -99,7 +99,7 @@ export async function startCourseCheckout(db: DB, actor: Principal, courseId: st
   }
 }
 
-async function lessonAccess(db: DbOrTx, actor: Principal | null, lessonId: string) {
+export async function lessonAccess(db: DbOrTx, actor: Principal | null, lessonId: string) {
   const [row] = await db.select({ l: courseLessons, c: courses, teacherUserId: teacherProfiles.userId }).from(courseLessons)
     .innerJoin(courses, eq(courses.id, courseLessons.courseId)).innerJoin(teacherProfiles, eq(teacherProfiles.id, courses.teacherId)).where(eq(courseLessons.id, lessonId));
   if (!row) throw new AppError("NOT_FOUND", "Lesson not found");

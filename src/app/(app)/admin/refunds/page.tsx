@@ -9,7 +9,7 @@ import { allowed, Denied } from "../guard";
 
 export default async function AdminRefunds() {
   const user = await requireUserPage("/admin/refunds");
-  if (!allowed(user, "admin.manage_refunds")) return <Denied />;
+  if (!allowed(user, "admin.manage_refunds")) Denied();
   const rows = await getDb().select().from(refunds).orderBy(desc(refunds.createdAt)).limit(100);
   return (
     <div>

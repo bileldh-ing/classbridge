@@ -5,6 +5,7 @@ import { getBookingDetail } from "@/lib/services/bookings";
 import { getI18n } from "@/lib/i18n/server";
 import { isAppError } from "@/lib/errors";
 import { LessonView } from "@/components/lessons/lesson-view";
+import { LessonExtras } from "@/components/lessons/reschedule-card";
 
 export default async function TeacherBookingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -13,5 +14,5 @@ export default async function TeacherBookingPage({ params }: { params: Promise<{
   let d;
   try { d = await getBookingDetail(getDb(), user, id); } catch (e) { if (isAppError(e) && e.code === "NOT_FOUND") notFound(); throw e; }
   if (d.viewerRole !== "teacher") notFound();
-  return <LessonView d={d} user={user} t={t} locale={locale} canReview={false} reviewed={false} />;
+  return <><LessonView d={d} user={user} t={t} locale={locale} canReview={false} reviewed={false} /><LessonExtras d={d} /></>;
 }

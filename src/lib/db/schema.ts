@@ -6,7 +6,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
-  pgTable, pgEnum, uuid, text, timestamp, integer, boolean, jsonb, smallint, doublePrecision,
+  pgTable, pgEnum, uuid, text, timestamp, integer, boolean, jsonb, smallint, doublePrecision, bigint,
   primaryKey, uniqueIndex, index, check,
 } from "drizzle-orm/pg-core";
 
@@ -54,6 +54,10 @@ export const users = pgTable("users", {
   emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
   status: accountStatusEnum("status").notNull().default("active"),
   isDemo: boolean("is_demo").notNull().default(false),
+  // Admin TOTP two-factor (secret AES-256-GCM encrypted with a key derived from AUTH_SECRET)
+  totpSecretEnc: text("totp_secret_enc"),
+  totpEnabledAt: timestamp("totp_enabled_at", { withTimezone: true }),
+  totpLastStep: bigint("totp_last_step", { mode: "number" }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (t) => [uniqueIndex("users_email_lower_uq").on(sql`lower(${t.email})`)]);
@@ -67,6 +71,7 @@ export const sessions = pgTable("sessions", {
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
   userAgent: text("user_agent"),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  mfaVerifiedAt: timestamp("mfa_verified_at", { withTimezone: true }),
 }, (t) => [index("sessions_user_idx").on(t.userId)]);
 
 export const authTokens = pgTable("auth_tokens", {
@@ -146,6 +151,7 @@ export const subjectCategories = pgTable("subject_categories", {
   nameFr: text("name_fr").notNull(),
   nameAr: text("name_ar").notNull(),
   sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
 });
 
 export const subjects = pgTable("subjects", {
@@ -323,6 +329,8 @@ export const bookings = pgTable("bookings", {
   roomName: text("room_name").notNull().unique(),
   intakeAnswer: text("intake_answer"),
   idempotencyKey: text("idempotency_key"),
+  groupSessionId: uuid("group_session_id"),
+  rescheduleCount: smallint("reschedule_count").notNull().default(0),
   isDemo: boolean("is_demo").notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -558,9 +566,61 @@ export const supportTickets = pgTable("support_tickets", {
   severity: text("severity").notNull().default("normal"),
   status: text("status").notNull().default("open"),
   internalNote: text("internal_note"),
+  category: text("category").notNull().default("general"),
+  bookingId: uuid("booking_id").references(() => bookings.id),
+  assignedTo: uuid("assigned_to").references(() => users.id),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-}, (t) => [index("support_status_idx").on(t.status)]);
+}, (t) => [index("support_status_idx").on(t.status), index("support_user_idx").on(t.userId, t.createdAt)]);
+
+export const supportTicketMessages = pgTable("support_ticket_messages", {
+  id: id(),
+  ticketId: uuid("ticket_id").notNull().references(() => supportTickets.id, { onDelete: "cascade" }),
+  authorId: uuid("author_id").notNull().references(() => users.id),
+  body: text("body").notNull(),
+  isInternal: boolean("is_internal").notNull().default(false), // staff-only notes, never shown to the requester
+  createdAt: createdAt(),
+});
+
+export const guardianLinks = pgTable("guardian_links", {
+  id: id(),
+  guardianId: uuid("guardian_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  learnerId: uuid("learner_id").references(() => users.id, { onDelete: "cascade" }),
+  learnerEmail: text("learner_email").notNull(),
+  status: text("status").notNull().default("pending"), // pending | active | declined | revoked
+  canViewBookings: boolean("can_view_bookings").notNull().default(true),
+  canViewProgress: boolean("can_view_progress").notNull().default(true),
+  consentTokenHash: text("consent_token_hash").unique(),
+  consentPolicyVersion: text("consent_policy_version"),
+  consentedAt: timestamp("consented_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+export const groupSessions = pgTable("group_sessions", {
+  id: id(),
+  teacherId: uuid("teacher_id").notNull().references(() => teacherProfiles.id),
+  offeringId: uuid("offering_id").notNull().references(() => lessonOfferings.id),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+  capacity: smallint("capacity").notNull(),
+  status: text("status").notNull().default("scheduled"), // scheduled | canceled
+  roomName: text("room_name").notNull().unique(),
+  createdAt: createdAt(),
+});
+
+export const messageAttachments = pgTable("message_attachments", {
+  id: id(),
+  messageId: uuid("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
+  conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  uploaderId: uuid("uploader_id").notNull().references(() => users.id),
+  storageKey: text("storage_key").notNull().unique(),
+  mime: text("mime").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  originalName: text("original_name").notNull(),
+  createdAt: createdAt(),
+});
 
 export const featureFlags = pgTable("feature_flags", {
   key: text("key").primaryKey(),
@@ -587,6 +647,8 @@ export const courses = pgTable("courses", {
   status: courseStatusEnum("status").notNull().default("draft"),
   passingScorePct: smallint("passing_score_pct").notNull().default(70),
   isDemo: boolean("is_demo").notNull().default(false),
+  moderationNote: text("moderation_note"),
+  moderatedAt: timestamp("moderated_at", { withTimezone: true }),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -677,3 +739,61 @@ export const certificates = pgTable("certificates", {
   issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("certificate_course_user_uq").on(t.courseId, t.userId)]);
 
+
+export const assignments = pgTable("assignments", {
+  id: id(),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  lessonId: uuid("lesson_id").references(() => courseLessons.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  instructions: text("instructions").notNull(),
+  maxPoints: smallint("max_points").notNull().default(10),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+/** Written answers. One per learner per assignment; resubmitting before grading replaces the text. */
+export const assignmentSubmissions = pgTable("assignment_submissions", {
+  id: id(),
+  assignmentId: uuid("assignment_id").notNull().references(() => assignments.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id),
+  body: text("body").notNull(),
+  status: text("status").notNull().default("submitted"), // submitted | graded
+  points: smallint("points"),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: updatedAt(),
+});
+
+/** Append-only grading history: every (re)grade is a new row. */
+export const submissionGrades = pgTable("submission_grades", {
+  id: id(),
+  submissionId: uuid("submission_id").notNull().references(() => assignmentSubmissions.id, { onDelete: "cascade" }),
+  graderId: uuid("grader_id").notNull().references(() => users.id),
+  points: smallint("points").notNull(),
+  feedback: text("feedback").notNull().default(""),
+  createdAt: createdAt(),
+});
+
+export const courseNotes = pgTable("course_notes", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  lessonId: uuid("lesson_id").notNull().references(() => courseLessons.id, { onDelete: "cascade" }),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  updatedAt: updatedAt(),
+}, (t) => [uniqueIndex("course_notes_user_lesson_uq").on(t.userId, t.lessonId)]);
+
+export const courseBookmarks = pgTable("course_bookmarks", {
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  lessonId: uuid("lesson_id").notNull().references(() => courseLessons.id, { onDelete: "cascade" }),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  createdAt: createdAt(),
+}, (t) => [primaryKey({ columns: [t.userId, t.lessonId] })]);
+
+export const courseAnnouncements = pgTable("course_announcements", {
+  id: id(),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  authorId: uuid("author_id").notNull().references(() => users.id),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  createdAt: createdAt(),
+});

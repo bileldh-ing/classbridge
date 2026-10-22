@@ -8,6 +8,8 @@ import { getLessonForUser } from "@/lib/services/courses";
 import { isAppError } from "@/lib/errors";
 import { Alert, buttonClass, Card, PageHeader } from "@/components/ui";
 import { CompleteLessonButton, QuizRunner } from "@/components/courses/client";
+import { StudyTools } from "@/components/courses/study-tools";
+import { getNote, isBookmarked } from "@/lib/services/lms-extra";
 
 export default async function LessonPlayer({ params }: { params: Promise<{ lessonId: string }> }) {
   const { lessonId } = await params;
@@ -25,6 +27,7 @@ export default async function LessonPlayer({ params }: { params: Promise<{ lesso
   const i = all.findIndex((l) => l.id === lessonId);
   const done = (await db.select().from(lessonProgress).where(and(eq(lessonProgress.userId, user.id), eq(lessonProgress.lessonId, lessonId)))).length > 0;
   const l = d.lesson;
+  const [note, bookmarked] = d.enrolled || d.isOwner ? await Promise.all([getNote(db, user, lessonId), isBookmarked(db, user, lessonId)]) : [null, false];
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_260px]">
       <div className="space-y-4">
@@ -41,7 +44,11 @@ export default async function LessonPlayer({ params }: { params: Promise<{ lesso
           {i < all.length - 1 ? <Link className={buttonClass("secondary")} href={`/learn/${all[i + 1].id}`}>{all[i + 1].title} →</Link> : <span />}
         </div>
       </div>
+      <div className="space-y-4">
+      {(d.enrolled || d.isOwner) && <Card><StudyTools lessonId={l.id} initialNote={note?.body ?? ""} initialBookmarked={bookmarked} /></Card>}
+      {(d.enrolled || d.isOwner) && <Link className="block text-sm underline" href={`/my-courses/${d.course.id}/assignments`}>Assignments & announcements</Link>}
       <nav aria-label="Course lessons" className="text-sm"><ol className="space-y-1">{all.map((x, j) => <li key={x.id}><Link className={`block rounded px-2 py-1 ${x.id === lessonId ? "bg-brand-50 font-medium" : "hover:bg-canvas"}`} href={`/learn/${x.id}`}>{j + 1}. {x.title}</Link></li>)}</ol></nav>
+      </div>
     </div>
   );
 }

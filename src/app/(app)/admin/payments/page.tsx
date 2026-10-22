@@ -7,7 +7,7 @@ import { allowed, Denied } from "../guard";
 
 export default async function AdminPayments() {
   const user = await requireUserPage("/admin/payments");
-  if (!allowed(user, "admin.view_payments")) return <Denied />;
+  if (!allowed(user, "admin.view_payments")) Denied();
   const db = getDb();
   const rows = await db.select().from(providerWebhookEvents).orderBy(desc(providerWebhookEvents.receivedAt)).limit(100);
   const mails = await db.select({ id: emailOutbox.id, template: emailOutbox.template, status: emailOutbox.status, attempts: emailOutbox.attempts, createdAt: emailOutbox.createdAt, lastError: emailOutbox.lastError }).from(emailOutbox).orderBy(desc(emailOutbox.createdAt)).limit(30);

@@ -1,9 +1,9 @@
 /** Teacher domain: public profile reads, owner profile/offering/availability/location management. */
-import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { DB, DbOrTx } from "../db";
 import {
-  availabilityExceptions, availabilityRules, bookings, cities, lessonOfferings, profiles, reviews, subjects,
+  availabilityExceptions, availabilityRules, bookings, cities, groupSessions, lessonOfferings, profiles, reviews, subjects,
   teacherBadges, teacherCredentials, teacherLocations, teacherProfiles, teacherSubjects, userRoles, users,
 } from "../db/schema";
 import { AppError } from "../errors";
@@ -197,7 +197,7 @@ export async function deleteException(db: DB, userId: string, id: string) {
 }
 
 /** Bookable slots for an offering between from/to (server-side truth; also used to validate bookings). */
-export async function computeSlots(db: DbOrTx, offeringId: string, from: Date, to: Date, now = new Date()) {
+export async function computeSlots(db: DbOrTx, offeringId: string, from: Date, to: Date, now = new Date(), opts: { excludeBookingId?: string } = {}) {
   const [row] = await db.select({ o: lessonOfferings, t: teacherProfiles }).from(lessonOfferings)
     .innerJoin(teacherProfiles, eq(teacherProfiles.id, lessonOfferings.teacherId))
     .where(eq(lessonOfferings.id, offeringId));
@@ -211,7 +211,15 @@ export async function computeSlots(db: DbOrTx, offeringId: string, from: Date, t
     lt(bookings.startsAt, new Date(to.getTime() + 86_400_000)), gte(bookings.endsAt, new Date(from.getTime() - 86_400_000)),
     // stale holds do not block (they are expired lazily on the next write)
     sql`NOT (${bookings.status} IN ('slot_held','awaiting_payment') AND ${bookings.holdExpiresAt} < now())`,
+    // group seats are represented by their group session below
+    isNull(bookings.groupSessionId),
+    opts.excludeBookingId ? ne(bookings.id, opts.excludeBookingId) : sql`true`,
   ));
+  const groupBusy = await db.select({ startsAt: groupSessions.startsAt, endsAt: groupSessions.endsAt }).from(groupSessions).where(and(
+    eq(groupSessions.teacherId, t.id), eq(groupSessions.status, "scheduled"),
+    lt(groupSessions.startsAt, new Date(to.getTime() + 86_400_000)), gte(groupSessions.endsAt, new Date(from.getTime() - 86_400_000)),
+  ));
+  busy.push(...groupBusy);
   const slots = generateSlots({
     rules, exceptions, busy, teacherTimezone: t.timezone, durationMinutes: o.durationMinutes, bufferMinutes: t.bufferMinutes,
     minNoticeMinutes: t.minNoticeMinutes, maxLessonsPerDay: t.maxLessonsPerDay, horizonDays: t.bookingHorizonDays, now, from, to,

@@ -4,7 +4,7 @@
  */
 import { eq } from "drizzle-orm";
 import type { DB } from "../db";
-import { bookings, classroomEvents, profiles, teacherProfiles } from "../db/schema";
+import { bookings, classroomEvents, groupSessions, profiles, teacherProfiles } from "../db/schema";
 import { AppError } from "../errors";
 import type { Principal } from "../auth/permissions";
 import type { ClassroomProvider } from "../classroom/provider";
@@ -30,7 +30,13 @@ export async function issueClassroomToken(db: DB, actor: Principal, bookingId: s
   if (!provider) return deny("CLASSROOM_PROVIDER_NOT_CONFIGURED", "Live video is not configured on this deployment (LiveKit credentials missing).");
   const [p] = await db.select({ name: profiles.displayName }).from(profiles).where(eq(profiles.userId, actor.id));
   const ttl = Math.max(60, Math.min(TOKEN_TTL_SECONDS, Math.floor((closesAt.getTime() - now.getTime()) / 1000)));
-  const token = await provider.issueToken({ room: b.roomName, identity: actor.id, name: p?.name ?? "Participant", ttlSeconds: ttl, isTeacher });
+  // Group seats share the session's room; 1:1 lessons use the booking's own random room name.
+  let room = b.roomName;
+  if (b.groupSessionId) {
+    const [g] = await db.select({ roomName: groupSessions.roomName }).from(groupSessions).where(eq(groupSessions.id, b.groupSessionId));
+    if (g) room = g.roomName;
+  }
+  const token = await provider.issueToken({ room, identity: actor.id, name: p?.name ?? "Participant", ttlSeconds: ttl, isTeacher });
   await db.transaction(async (tx) => {
     await tx.insert(classroomEvents).values({ bookingId: b.id, userId: actor.id, kind: "token_issued", detail: isTeacher ? "teacher" : "student" });
     if (isTeacher && b.status === "confirmed" && now >= opensAt) {
@@ -38,7 +44,7 @@ export async function issueClassroomToken(db: DB, actor: Principal, bookingId: s
       if (cur.status === "confirmed") await transition(tx, cur, "in_progress", "system", actor.id, { reason: "teacher_joined_classroom" });
     }
   });
-  return { token, url: provider.url, room: b.roomName, expiresInSeconds: ttl, role: isTeacher ? "teacher" : "student" };
+  return { token, url: provider.url, room, expiresInSeconds: ttl, role: isTeacher ? "teacher" : "student" };
 }
 
 export async function recordClassroomEvent(db: DB, actor: Principal, bookingId: string, kind: "joined" | "left") {

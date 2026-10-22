@@ -8,7 +8,7 @@ import { allowed, Denied } from "../guard";
 
 export default async function AdminReports() {
   const user = await requireUserPage("/admin/reports");
-  if (!allowed(user, "admin.manage_reports")) return <Denied />;
+  if (!allowed(user, "admin.manage_reports")) Denied();
   const db = getDb();
   const rows = await db.select().from(userReports).where(inArray(userReports.status, ["open", "reviewing"])).orderBy(desc(userReports.createdAt)).limit(100);
   const tickets = await db.select().from(supportTickets).orderBy(desc(supportTickets.createdAt)).limit(50);

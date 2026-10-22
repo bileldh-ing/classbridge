@@ -9,7 +9,7 @@ import { allowed, Denied } from "../guard";
 
 export default async function VerificationQueue() {
   const user = await requireUserPage("/admin/teachers");
-  if (!allowed(user, "admin.verify_teachers")) return <Denied />;
+  if (!allowed(user, "admin.verify_teachers")) Denied();
   const db = getDb();
   const pending = await db.select({ t: teacherProfiles, name: profiles.displayName, email: users.email }).from(teacherProfiles)
     .innerJoin(profiles, eq(profiles.userId, teacherProfiles.userId)).innerJoin(users, eq(users.id, teacherProfiles.userId))

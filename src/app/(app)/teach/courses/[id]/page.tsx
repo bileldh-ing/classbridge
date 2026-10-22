@@ -21,7 +21,7 @@ export default async function CourseBuilder({ params }: { params: Promise<{ id: 
   const c = d.course;
   return (
     <div className="max-w-4xl space-y-6">
-      <PageHeader title={c.title} subtitle={<span><Badge>{c.status}</Badge> · <Link className="underline" href={`/courses/${c.slug}`}>Preview public page</Link></span>}
+      <PageHeader title={c.title} subtitle={<span><Badge>{c.status}</Badge> · <Link className="underline" href={`/courses/${c.slug}`}>Preview public page</Link> · <Link className="underline" href={`/my-courses/${c.id}/assignments`}>Assignments, grading & announcements</Link></span>}
         actions={<div className="flex gap-2">{c.status !== "published" ? <ActionButton endpoint={`/api/teacher/courses/${c.id}/status`} body={{ status: "published" }} label="Publish" /> : <ActionButton endpoint={`/api/teacher/courses/${c.id}/status`} body={{ status: "draft" }} label="Unpublish" variant="secondary" />}</div>} />
       <Card><h2 className="mb-3 font-semibold">Details</h2><CourseForm id={c.id} subjects={subs} initial={c} /></Card>
       <Card><h2 className="mb-3 font-semibold">Curriculum</h2>

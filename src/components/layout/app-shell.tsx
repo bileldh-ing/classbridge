@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, CalendarDays, CreditCard, Heart, Home, LayoutDashboard, MessageSquare, Search, Settings, ShieldCheck, Users, FileText, Wallet, UserCircle, ClipboardList, Bell, Flag, Receipt, Award, GraduationCap } from "lucide-react";
+import { BookOpen, CalendarDays, CreditCard, Heart, Home, LayoutDashboard, MessageSquare, Search, Settings, ShieldCheck, Users, FileText, Wallet, UserCircle, ClipboardList, Bell, Flag, Receipt, Award, GraduationCap, LifeBuoy, ShieldAlert, Tags, ToggleRight } from "lucide-react";
 import type { SessionUser } from "@/lib/auth/core";
 import { getI18n } from "@/lib/i18n/server";
 import { RoleSwitcher } from "@/components/client/role-switcher";
@@ -22,6 +22,7 @@ export async function AppShell({ user, children }: { user: SessionUser; children
       { href: "/teach/bookings", label: t.nav.bookings, icon: BookOpen },
       { href: "/teach/credentials", label: t.nav.credentials, icon: Award },
       { href: "/teach/courses", label: t.nav.teacherCourses, icon: GraduationCap },
+      { href: "/teach/group-sessions", label: t.nav.groupSessions, icon: Users },
       { href: "/teach/earnings", label: t.nav.earnings, icon: Wallet },
       { href: "/messages", label: t.nav.messages, icon: MessageSquare },
       { href: "/notifications", label: t.nav.notifications, icon: Bell },
@@ -34,6 +35,10 @@ export async function AppShell({ user, children }: { user: SessionUser; children
       { href: "/admin/payments", label: t.nav.adminPayments, icon: Receipt, perm: "admin.view_payments" },
       { href: "/admin/refunds", label: t.nav.adminRefunds, icon: CreditCard, perm: "admin.manage_refunds" },
       { href: "/admin/reports", label: t.nav.adminReports, icon: Flag, perm: "admin.manage_reports" },
+      { href: "/admin/support", label: t.nav.adminSupport, icon: LifeBuoy, perm: "support.manage_tickets" },
+      { href: "/admin/moderation", label: t.nav.adminModeration, icon: ShieldAlert, perm: "admin.moderate_content" },
+      { href: "/admin/subjects", label: t.nav.adminSubjects, icon: Tags, perm: "admin.manage_subjects" },
+      { href: "/admin/flags", label: t.nav.adminFlags, icon: ToggleRight, perm: "admin.manage_flags" },
       { href: "/admin/audit", label: t.nav.adminAudit, icon: FileText, perm: "admin.view_audit" },
       { href: "/settings", label: t.nav.settings, icon: Settings, perm: "admin.view_dashboard" },
     ] as const).filter((i) => can(user, i.perm)) : [
@@ -45,6 +50,8 @@ export async function AppShell({ user, children }: { user: SessionUser; children
       { href: "/saved", label: t.nav.saved, icon: Heart },
       { href: "/payments", label: t.nav.payments, icon: CreditCard },
       { href: "/notifications", label: t.nav.notifications, icon: Bell },
+      { href: "/support", label: t.nav.support, icon: LifeBuoy },
+      { href: "/guardian", label: t.nav.family, icon: Users },
       { href: "/settings", label: t.nav.settings, icon: Settings },
     ];
   const roleLabels = { student: t.nav.asStudent, teacher: t.nav.asTeacher, admin: t.nav.asAdmin };

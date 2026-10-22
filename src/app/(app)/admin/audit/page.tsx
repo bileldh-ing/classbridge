@@ -6,7 +6,7 @@ import { allowed, Denied } from "../guard";
 
 export default async function AuditPage() {
   const user = await requireUserPage("/admin/audit");
-  if (!allowed(user, "admin.view_audit")) return <Denied />;
+  if (!allowed(user, "admin.view_audit")) Denied();
   const rows = await recentAudit(getDb(), user, 200);
   return (
     <div>

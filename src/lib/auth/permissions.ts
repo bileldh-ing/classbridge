@@ -5,16 +5,16 @@ export type Permission =
   | "teach.manage_profile" | "teach.manage_bookings" | "teach.view_earnings"
   | "admin.view_dashboard" | "admin.verify_teachers" | "admin.manage_users" | "admin.view_audit"
   | "admin.view_payments" | "admin.manage_subjects" | "admin.manage_reports" | "admin.manage_refunds"
-  | "support.manage_tickets";
+  | "support.manage_tickets" | "admin.manage_flags" | "admin.moderate_content";
 
 const MATRIX: Record<Role, Permission[]> = {
   student: ["learn.book", "learn.review", "learn.message"],
   teacher: ["teach.manage_profile", "teach.manage_bookings", "teach.view_earnings", "learn.message"],
-  support: ["admin.view_dashboard", "admin.manage_reports", "support.manage_tickets"],
+  support: ["admin.view_dashboard", "admin.manage_reports", "support.manage_tickets", "admin.moderate_content"],
   admin: [
     "admin.view_dashboard", "admin.verify_teachers", "admin.manage_users", "admin.view_audit",
     "admin.view_payments", "admin.manage_subjects", "admin.manage_reports", "admin.manage_refunds",
-    "support.manage_tickets",
+    "support.manage_tickets", "admin.manage_flags", "admin.moderate_content",
   ],
 };
 
