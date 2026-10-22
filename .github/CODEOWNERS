@@ -1,0 +1,8 @@
+# Default owner for everything
+*                         @bileldh-ing
+# Security-sensitive areas need an explicit review
+/src/lib/auth/            @bileldh-ing
+/src/lib/payments/        @bileldh-ing
+/src/proxy.ts             @bileldh-ing
+/drizzle/                 @bileldh-ing
+/.github/workflows/       @bileldh-ing

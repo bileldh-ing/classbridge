@@ -1,0 +1,92 @@
+name: Mobile (Capacitor)
+
+on:
+  push:
+    branches: [main]
+    paths: [android/**, ios/**, capacitor.config.ts, mobile/**, fastlane/**, .github/workflows/mobile.yml]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Run signed store lanes (requires signing secrets)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  # Production URL the native shell loads. Set the repository variable CAP_SERVER_URL.
+  CAP_SERVER_URL: ${{ vars.CAP_SERVER_URL || 'https://classbridge.example.com' }}
+
+jobs:
+  android:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec cap sync android
+      - name: Assemble debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: classbridge-android-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+      - name: Play Store internal track (secrets-gated)
+        if: inputs.release && env.PLAY_JSON_KEY != ''
+        env:
+          PLAY_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          gem install fastlane --no-document
+          fastlane android internal
+
+  ios:
+    name: iOS unsigned build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec cap sync ios
+      - name: Build for iOS Simulator (no code signing)
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Zip .app
+        run: cd build/ios/Build/Products/Release-iphonesimulator && zip -qry ../../../../../ClassBridge-simulator.app.zip App.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: classbridge-ios-simulator-app
+          path: ClassBridge-simulator.app.zip
+      - name: TestFlight (secrets-gated)
+        if: inputs.release && env.ASC_KEY_ID != ''
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          ASC_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_P8_BASE64 }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          gem install fastlane --no-document
+          fastlane ios beta

@@ -1,0 +1,6 @@
+# Store identifiers (override with env vars in CI).
+app_identifier(ENV["CAP_APP_ID"] || "com.classbridge.app")
+apple_id(ENV["APPLE_ID"]) if ENV["APPLE_ID"]
+team_id(ENV["APPLE_TEAM_ID"]) if ENV["APPLE_TEAM_ID"]
+json_key_file(ENV["PLAY_JSON_KEY_PATH"] || "fastlane/play-key.json")
+package_name(ENV["CAP_APP_ID"] || "com.classbridge.app")

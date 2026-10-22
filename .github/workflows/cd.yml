@@ -1,0 +1,99 @@
+name: CD
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  image:
+    name: Build & push image to GHCR
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    name: GitHub Release with changelog
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Changelog since previous tag (conventional commits)
+        run: |
+          PREV=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          RANGE=${PREV:+$PREV..}${GITHUB_REF_NAME}
+          {
+            echo "## ${GITHUB_REF_NAME}"
+            for t in feat fix perf security docs refactor test ci chore; do
+              lines=$(git log --pretty='- %s (%h)' "$RANGE" | grep -E "^- ${t}(\(|:)" || true)
+              [ -n "$lines" ] && printf '\n### %s\n%s\n' "$t" "$lines"
+            done
+            other=$(git log --pretty='- %s (%h)' "$RANGE" | grep -vE '^- (feat|fix|perf|security|docs|refactor|test|ci|chore)(\(|:)' || true)
+            [ -n "$other" ] && printf '\n### other\n%s\n' "$other"
+            printf '\nImage: `ghcr.io/%s:%s`\n' "${GITHUB_REPOSITORY}" "${GITHUB_REF_NAME#v}"
+          } > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: RELEASE_NOTES.md
+
+  deploy:
+    name: Deploy (stub, secrets-gated)
+    needs: image
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: No deploy target configured
+        if: env.FLY_API_TOKEN == '' && env.RENDER_DEPLOY_HOOK_URL == '' && env.VERCEL_TOKEN == ''
+        run: echo "::notice::No deploy secrets set (FLY_API_TOKEN / RENDER_DEPLOY_HOOK_URL / VERCEL_TOKEN). Image was published; see docs/DEPLOYMENT.md."
+      - name: Fly.io (image from GHCR; runs migrations via release_command)
+        if: env.FLY_API_TOKEN != ''
+        run: |
+          curl -L https://fly.io/install.sh | sh
+          ~/.fly/bin/flyctl deploy --image ghcr.io/${{ github.repository }}:${GITHUB_REF_NAME#v} --remote-only
+      - name: Render (deploy hook)
+        if: env.RENDER_DEPLOY_HOOK_URL != ''
+        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
+      - name: Vercel (prebuilt)
+        if: env.VERCEL_TOKEN != ''
+        run: |
+          npm i -g vercel@latest
+          vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+          vercel build --prod --token "$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"

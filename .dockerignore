@@ -1,0 +1,17 @@
+node_modules
+.next
+.pgdata
+storage
+.git
+.github
+android
+ios
+playwright-report
+test-results
+test-results-demo
+demo-scenes
+coverage
+*.log
+.env
+.env.*
+!.env.example

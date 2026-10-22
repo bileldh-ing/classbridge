@@ -1,0 +1,35 @@
+# Store delivery lanes. All credentials come from CI secrets (see docs/DEPLOYMENT.md#mobile); nothing is committed.
+default_platform(:android)
+
+platform :android do
+  desc "Signed release AAB → Play Store internal testing track"
+  lane :internal do
+    File.write("play-key.json", ENV.fetch("PLAY_JSON_KEY"))
+    keystore = File.expand_path("../android/release.keystore", __dir__)
+    File.binwrite(keystore, Base64.decode64(ENV.fetch("ANDROID_KEYSTORE_BASE64")))
+    gradle(
+      project_dir: "android", task: "bundle", build_type: "Release",
+      properties: {
+        "android.injected.signing.store.file" => keystore,
+        "android.injected.signing.store.password" => ENV.fetch("ANDROID_KEYSTORE_PASSWORD"),
+        "android.injected.signing.key.alias" => ENV.fetch("ANDROID_KEY_ALIAS"),
+        "android.injected.signing.key.password" => ENV.fetch("ANDROID_KEY_PASSWORD"),
+      },
+    )
+    upload_to_play_store(track: "internal", json_key: "play-key.json", aab: lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH], release_status: "draft")
+  end
+end
+
+platform :ios do
+  desc "Signed build → TestFlight (App Store Connect API key + match certificates)"
+  lane :beta do
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"), issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_content: Base64.decode64(ENV.fetch("ASC_KEY_P8_BASE64")), in_house: false,
+    )
+    setup_ci
+    match(type: "appstore", readonly: true, git_url: ENV.fetch("MATCH_GIT_URL"), api_key: api_key)
+    build_app(project: "ios/App/App.xcodeproj", scheme: "App", export_method: "app-store")
+    upload_to_testflight(api_key: api_key, skip_waiting_for_build_processing: true)
+  end
+end
