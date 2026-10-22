@@ -45,10 +45,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api "repos/${{ github.repository }}/actions/runs?status=success&per_page=60" | jq '{runs: [.workflow_runs[] | select(.name != "Render video") |
-            {workflow: .name, title: .display_title, number: .run_number, branch: .head_branch, event: .event, sha: .head_sha,
-             actor: .actor.login, created: .created_at, conclusion: .conclusion,
-             seconds: ((.updated_at | fromdateiso8601) - (.run_started_at | fromdateiso8601))}] | .[:7]}' > src/generated/runs.json
+          # successful runs on main (no bot PRs), newest per workflow, so the segment shows the real pipeline
+          gh api "repos/${{ github.repository }}/actions/runs?status=success&branch=main&per_page=100" | jq '{runs: ([.workflow_runs[]
+            | select(.name != "Render video" and (.actor.login | test("\\[bot\\]$") | not) and (.path | startswith(".github/workflows/")))
+            | {workflow: .name, title: .display_title, number: .run_number, branch: .head_branch, event: .event, sha: .head_sha,
+               actor: .actor.login, created: .created_at, conclusion: .conclusion,
+               seconds: ((.updated_at | fromdateiso8601) - (.run_started_at | fromdateiso8601))}]
+            | reduce .[] as $r ([]; if any(.[]; .workflow == $r.workflow) then . else . + [$r] end) | .[:7])}' > src/generated/runs.json
           cat src/generated/runs.json
       - name: Music bed (self-generated, royalty-free)
         run: python3 scripts/make-music.py 540

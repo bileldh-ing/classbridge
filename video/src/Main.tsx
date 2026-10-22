@@ -61,7 +61,7 @@ export const Main: React.FC = () => {
           return [seq, <TransitionSeries.Transition key={`t${i}`} presentation={presentation(transitions[i])} timing={linearTiming({ durationInFrames: TRANSITION_FRAMES, easing: Easing.inOut(Easing.cubic) })} />];
         })}
       </TransitionSeries>
-      <Audio src={staticFile("music.wav")} volume={(f) => 0.32 * interpolate(f, [0, 30, durationInFrames - 75, durationInFrames - 5], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })} />
+      <Audio src={staticFile("music.wav")} volume={(f) => 0.38 * interpolate(f, [0, 30, durationInFrames - 75, durationInFrames - 5], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })} />
     </AbsoluteFill>
   );
 };

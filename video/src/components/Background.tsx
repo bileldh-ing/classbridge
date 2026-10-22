@@ -8,7 +8,7 @@ export const Background: React.FC = () => {
   const a = f / 30;
   const blob = (x: number, y: number, size: number, color: string, op: number): React.CSSProperties => ({
     position: "absolute", left: x - size / 2, top: y - size / 2, width: size, height: size, borderRadius: "50%",
-    background: `radial-gradient(circle, ${color} 0%, transparent 65%)`, opacity: op, filter: "blur(40px)",
+    background: `radial-gradient(circle, ${color} 0%, transparent 65%)`, opacity: op,
   });
   return (
     <AbsoluteFill style={{ background: C.bg, overflow: "hidden" }}>
