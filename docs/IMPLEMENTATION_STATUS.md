@@ -1,7 +1,7 @@
 # Implementation status
 
-Updated 21 Oct 2026. Status values: **implemented**, **partial** (partially implemented), **blocked** (needs something outside the repo), **not implemented**.
-"Evidence" names routes, files, migrations and test names. Tests listed here passed in the last run (87/87, see `TESTING.md`). Migrations: `drizzle/0000_extensions.sql`, `0001_init.sql`, `0002_constraints.sql`. Provider-backed features were never exercised against the real provider (no credentials).
+Updated 22 Oct 2026. Status values: **implemented**, **partial** (partially implemented), **blocked** (needs something outside the repo), **not implemented**.
+"Evidence" names routes, files, migrations and test names. Test results are those of the latest CI run (see `TESTING.md`). Migrations: `drizzle/0000_extensions.sql`, `0001_init.sql`, `0002_constraints.sql`, `0003_production.sql`. Provider-backed features were never exercised against the real provider (no credentials).
 
 ## §0 Execution rules / definition of done
 | Requirement | Status | Evidence / notes |
@@ -9,7 +9,7 @@ Updated 21 Oct 2026. Status values: **implemented**, **partial** (partially impl
 | Real Postgres, versioned migrations, seed labelled demo | implemented | `drizzle/*.sql`, `scripts/migrate.ts`, `scripts/seed.ts` (all names "(Demo)", `users.is_demo`, demo reviews flagged) |
 | Server-side adapters, no silent success when unconfigured | implemented | `src/lib/payments/*`, `src/lib/classroom/provider.ts`, `src/lib/geo/geocoding.ts`, `src/lib/email/*`; test "unconfigured provider: honest error, nothing charged, booking still held"; `/api/health` providers block |
 | Lint / typecheck / unit / integration / build recorded honestly | implemented | `TESTING.md` |
-| E2E tests | blocked | Playwright Chromium download returns 403 for linux-arm64 here |
+| E2E tests | implemented (CI) | `e2e/*.spec.ts` run in GitHub Actions (ubuntu x86_64, chromium) against a seeded standalone build; report + videos uploaded as artifacts |
 | `TECH_DECISIONS.md` | implemented | `docs/TECH_DECISIONS.md` |
 
 ## §1 Roles
@@ -18,10 +18,10 @@ Updated 21 Oct 2026. Status values: **implemented**, **partial** (partially impl
 | Visitor | implemented | public routes smoke-tested 200; drafts 404 |
 | Student | implemented | `/dashboard`, `/lessons`, `/my-courses`, `/saved`, `/payments`, `/messages` |
 | Teacher (same identity) | implemented | `user_roles`, `/api/auth/role`; test "role upgrade keeps a single identity" |
-| Parent/guardian | not implemented | no tables or flows; platform must stay adult-only (18+ self-declaration at signup) |
+| Parent/guardian | implemented (flag `guardian_links`) | `guardian_links`, `src/lib/services/guardians.ts`, `/guardian`, `/guardian/consent`; learner consent recorded in `consent_records`; read-only limited view; revocable. Minors stay gated (`minor_accounts` off, signup 18+). Test "nothing is shared before learner consent…" |
 | Institution/team | not implemented | — |
-| Support moderator | partial | `support` role with least-privilege permissions (`src/lib/auth/permissions.ts`, test "support is least-privilege"); support ticket queue is read-only (no user-facing ticket form) |
-| Administrator | partial | verification, users, refunds, reports, audit; no subject/category management, feature-flag UI or config UI |
+| Support moderator | implemented | support queue `/admin/support` (reply, internal notes, status, assign), moderation `/admin/moderation`; least privilege (no verification/refunds/flags); TOTP required |
+| Administrator | implemented | + `/admin/subjects`, `/admin/flags`, `/admin/moderation`, `/admin/support`; all audited; TOTP 2FA; non-staff get HTTP 403 (`forbidden()`) |
 
 ## §2 Architecture
 | Item | Status | Evidence |
@@ -33,14 +33,14 @@ Updated 21 Oct 2026. Status values: **implemented**, **partial** (partially impl
 | Supabase | not implemented (by decision) | plain Postgres + custom auth; documented in TECH_DECISIONS |
 | OpenAPI / typed API docs | partial | `docs/API.md` (hand-written), no OpenAPI file |
 | Background jobs | partial | `scripts/jobs.ts` (hold expiry, email delivery, 24h/1h reminders) run by cron/loop; no Redis queue; no transcoding |
-| Realtime | not implemented | messages are persisted and fetched; no WebSocket push |
+| Realtime | implemented | Postgres `LISTEN/NOTIFY` (`messages_notify` trigger) → `src/lib/realtime.ts` → SSE `/api/conversations/[id]/stream` (membership-checked); test "new messages are published on the cb_messages channel" |
 | LiveKit classroom | implemented (adapter) / blocked (live test) | `src/lib/classroom/provider.ts`; tests in `classroom-reviews.test.ts`; no LiveKit credentials |
 | GeocodingProvider / MapProvider | partial | `GeocodingProvider` with Mapbox + Nominatim; map is Leaflet with configurable tiles (no separate `MapProvider` interface) |
 | Payment/Refund/Payout provider interfaces | implemented (Stripe adapter) / blocked (live) | `src/lib/payments/provider.ts`, `stripe.ts`; payouts gated. Stripe does not support Tunisia (https://stripe.com/global) |
-| CI (GitHub Actions) | not implemented | no `.github/workflows` |
-| Error monitoring | not implemented | structured logs only (`src/lib/log.ts`) |
-| Docker | not implemented | — |
-| Health check, rate limiting, audit | implemented | `/api/health` (smoke 200), `rate_limits` table, `audit_log` (append-only trigger) |
+| CI/CD (GitHub Actions) | implemented | `ci.yml` (lint, typecheck, unit, integration on postgres:17, build, Playwright e2e, docker build), `codeql.yml`, `dependency-audit.yml`, `cd.yml` (GHCR + Release + gated deploy), `mobile.yml`, `demo-video.yml`, `release-please.yml`, Dependabot |
+| Error monitoring | implemented (adapter) | `src/lib/monitoring.ts` (Sentry envelope API, PII-scrubbed, optional via `SENTRY_DSN`), `src/instrumentation.ts` `onRequestError`; unit test "builds events without query strings, emails or secrets" |
+| Docker | implemented | multi-stage `Dockerfile` (standalone, non-root, healthcheck, bundled `migrate.mjs`), `docker-compose.yml` (app + postgres + migrate) |
+| Health check, rate limiting, audit | implemented | `/api/health`, `/api/health/live`, `/api/health/ready` (DB + pending migrations), `rate_limits` on login/booking/messages/tickets/MFA/announcements/guardian requests, `audit_log` (append-only trigger) |
 | Optional AI off by default | implemented (as off) | `feature_flags.ai_features=false`; no AI features built |
 
 ## §3 Brand, UX, design system
@@ -50,32 +50,32 @@ Updated 21 Oct 2026. Status values: **implemented**, **partial** (partially impl
 | WCAG 2.2 AA | partial | labels, focus rings, skip-to-main, semantic headings in code; **no axe/keyboard audit run** |
 | EN/FR/AR with RTL | implemented | `src/lib/i18n/messages.ts` (type-checked completeness), `<html lang dir>` in `src/app/layout.tsx`, logical CSS props; RTL not visually tested |
 | Role-specific navigation, permission-filtered links | implemented | `src/components/layout/app-shell.tsx` (admin links filtered by `perm`) |
-| Nav items "Assignments", "Reviews", "Students", "Assessments", "Analytics", "Support queue", "Subjects", "Configuration" | not implemented | no pages for these |
+| Nav items | partial | added: Support (users), Family access, Group sessions, Support queue, Moderation, Subjects, Feature flags; assignments reachable from course pages. Not built: teacher analytics, student roster page |
 
 ## §4 Journeys
 | Journey | Status | Notes |
 |---|---|---|
-| A — find & book | partial | search/filters/map/profile/slot picker/holds/booking/checkout/notifications/.ics/reminders/attendance/reviews/cancellation implemented and integration-tested; paid checkout untested against Stripe; "next available slot" on cards and timezone-compatible availability filter not verified; no rescheduling |
+| A — find & book | implemented / blocked (live payments) | + rescheduling (`src/lib/services/reschedule.ts`, atomic, policy) and group seats; e2e "paid lesson reaches checkout…", "free trial lesson can be confirmed end to end"; paid checkout untested against real Stripe |
 | B — teacher onboarding | implemented | `/become-a-teacher`, `/teach/profile`, `/teach/offerings`, `/teach/availability`, `/teach/credentials`, `/api/teachers/me/submit`, admin decision + badges; test "non-admins are refused; approval publishes and writes an immutable audit record". No malware scan |
 | C — live lesson | partial | token authorization tested; room UI (`src/components/lessons/classroom.tsx`) never connected to a real LiveKit server |
-| D — self-paced e-learning | partial | catalog, detail, enroll (free + paid via webhook), player, progress, quizzes, certificates (`/certificates/[code]`) tested; no notes/bookmarks, no written-answer questions/manual grading, no timed attempts, no assignments |
-| E — support/admin | partial | reports + admin report actions + audit implemented; support tickets have no creation flow and no internal notes |
+| D — self-paced e-learning | implemented (timed attempts not built) | + assignments/written answers with manual grading & append-only history, notes, bookmarks, announcements (`src/lib/services/lms-extra.ts`, `/my-courses/[courseId]/assignments`) |
+| E — support/admin | implemented | tickets (`/support`), queue with internal notes (`/admin/support`), moderation, flags, taxonomy; tests "internal notes are never visible to the requester…" (integration + e2e) |
 
 ## §5 Functional specification
 | Section | Status | Evidence / gaps |
 |---|---|---|
 | 5.1 Public site & SEO | partial | all listed pages return 200 (smoke); `sitemap.ts`, `robots.ts`, metadata + Open Graph on teacher pages; unpublished/unknown teacher → 404. Gaps: no JSON-LD, no city/subject landing pages (subject pages only), legal texts are placeholders |
-| 5.2 Auth & account lifecycle | partial | signup/verify/login/reset/logout/logout-all/role upgrade/consents/privacy requests (`/api/privacy`); test "signup → verify email → login → session → reset password revokes sessions". Gaps: no OAuth, **no admin MFA**, export/erasure are recorded requests only (no automated job) |
+| 5.2 Auth & account lifecycle | partial | + staff TOTP 2FA (RFC 6238, encrypted secret, replay protection, per-session verification; `/mfa`). Gaps: no OAuth, export/erasure are recorded requests only |
 | 5.3 Directory & search | implemented | `/api/search/teachers`, `src/lib/services/teacher-search.ts` (FTS + trgm, filters, sort, pagination, radius, bbox); test "filters server-side, paginates, excludes drafts, and never returns private positions". Distances rounded to 0.5 km (`roundPublicDistanceKm`, test "rounds to the nearest 0.5 km"). PostGIS replaced by earthdistance (documented) |
 | 5.4 Profile & offerings | partial | published-only profile, completeness indicator, intro video, offerings CRUD with status/archive. Gaps: group capacity (group lessons flagged off), intake questions, portfolio samples |
-| 5.5 Scheduling & bookings | partial | rules, exceptions, buffers, notice, max/day, DST (`slots.test.ts`), exclusion constraint (test "the database itself rejects overlapping active bookings"), state machine (`state-machine.test.ts`), append-only events, `.ics`. Gap: **rescheduling not implemented** |
+| 5.5 Scheduling & bookings | implemented | + rescheduling (tests "moves a confirmed lesson atomically…", "concurrent reschedules into the same slot: exactly one wins"), group sessions with capacity (test "enforces capacity under concurrency…") |
 | 5.6 Live classroom | partial | random room names, token endpoint checks, short TTL, attendance, events; gaps: device check page, whiteboard, network-quality indicator, cleanup job; no live test |
-| 5.7 Courses & LMS | partial | course→sections→lessons, drafts/publish, reorder (`/api/teacher/courses/[id]/move`), server-side content protection (test "protects paid lesson content server-side and hides correct answers"), progress, quizzes (choice questions, attempt limits, shuffle), certificates. Gaps: notes/bookmarks, assignments/submissions, written answers + manual grading, announcements, learner list, signed URLs for course files, transcripts |
-| 5.8 Messaging & notifications | partial | membership checks, blocking, rate limits, read state, notification centre, email outbox with idempotency; test "only conversation members can read/send; blocking stops sending". Gaps: attachments, realtime, notification preferences |
+| 5.7 Courses & LMS | implemented (minor gaps) | + assignments, written answers, manual grading history, notes, bookmarks, announcements. Gaps: learner roster page, signed URLs for course files, transcripts, timed quizzes |
+| 5.8 Messaging & notifications | implemented (no notification preferences) | + attachments (`message_attachments`, private storage, magic bytes, 5 MB; test "accepts real images/PDFs only…"), realtime SSE |
 | 5.9 Reviews | partial | eligibility + one per booking (tests "requires a completed, attended booking…", "a no-show booking cannot be reviewed"), teacher response column, moderation status, distinct badges. Gap: review report flow UI |
 | 5.10 Payments, refunds, earnings | partial / blocked | orders/items snapshots, webhook verify + idempotency, append-only ledger, provider-driven refunds, disputes recorded (`payments.test.ts`, `stripe-webhook.test.ts`). Blocked: live Stripe untested; Stripe unavailable for a Tunisian entity; **payouts gated off** (no withdraw, `payout_status='unavailable'`). Gaps: packages, invoices |
 | 5.11 Optional AI | not implemented | flag off by default (allowed by spec) |
-| 5.12 Admin & operations | partial | `/admin` metrics, users (suspend/reactivate with reason), teacher verification, bookings, payment events, refunds (retry), reports, audit log. Gaps: subject management, course moderation, feature-flag/config UI, email delivery log view, appeals, exports |
+| 5.12 Admin & operations | implemented (minor gaps) | + subjects/categories, course & profile moderation, feature flags, support queue. Gaps: email delivery log view, appeals, exports |
 
 ## §6 Data model
 | Area | Status | Notes |
@@ -109,17 +109,17 @@ Updated 21 Oct 2026. Status values: **implemented**, **partial** (partially impl
 | 10 Edge-case tests | partial | privacy + invalid coordinates unit-tested; provider error/rate-limit cases not tested |
 
 ## §9 Security & privacy
-Partial — see `SECURITY_PRIVACY.md` "Known gaps": `'unsafe-inline'` CSP, no admin MFA, no malware scanning, local-disk storage, no error monitoring, placeholder legal texts, no minor/guardian safeguarding.
+Implemented: nonce CSP (scripts), staff TOTP, monitoring adapter, magic-byte checks on all uploads, guardian consent flow. Remaining gaps (`SECURITY_PRIVACY.md`): malware scanning (adapter point only), local-disk storage (S3 adapter to write), `'unsafe-inline'` for styles only, placeholder legal texts.
 
 ## §10 Screens
-Public: implemented (all listed). Student: partial (no assignments/grades/support pages; invoices not generated). Teacher: partial (no student roster, assessments/grading, analytics, reviews page). Admin: partial (no subject management, course moderation, feature configuration, support queue actions).
+Public: implemented. Student: implemented (+ support, family access, assignments; invoices not generated). Teacher: partial (+ grading, group sessions; no student roster, analytics, reviews page). Admin: implemented (+ subjects, moderation, flags, support queue).
 
 ## §11 Testing
 | Item | Status |
 |---|---|
 | Unit tests (all listed topics) | implemented — 49 tests |
 | Integration tests (all 10 listed) | implemented — 38 tests; "paid files not available by guessing URLs" covered for credentials/course content |
-| E2E 1–10 | blocked (no browser) |
+| E2E 1–10 | implemented in CI: search→profile, signup/signin, booking to checkout (payment not configured) + free confirm, classroom token denied, admin verification + audit (with TOTP), RTL Arabic, mobile viewport, CSP/readiness, support internal notes |
 | Performance / accessibility measurements | not implemented |
 
 ## §12 Phases
@@ -129,5 +129,11 @@ Phases 0–7 substantially done (with gaps above); Phase 8 (polish/production: e
 | Doc | Status |
 |---|---|
 | README, LOCAL_SETUP, TESTING, DEPLOYMENT, IMPLEMENTATION_STATUS, HANDOVER, API, SECURITY_PRIVACY, PAYMENTS_AND_REFUNDS, MAPS_LOCATION_PRIVACY, CLASSROOM, TECH_DECISIONS, USER_GUIDE_STUDENT/TEACHER/ADMIN | present |
-| PRODUCT_REQUIREMENTS.md, ARCHITECTURE.md, DATABASE.md | not written |
-| Screenshots | none (none generated from the running app) |
+| PRODUCT_REQUIREMENTS.md, ARCHITECTURE.md (mermaid), DATABASE.md (ERD) | present |
+| Demo videos | `demo-video.yml` → artifact `demo-scenes` (one video per scene) |
+
+## Mobile / PWA
+| Item | Status | Evidence |
+|---|---|---|
+| Installable PWA | implemented | `src/app/manifest.ts`, `public/icons/*`, `public/sw.js` (offline page, never caches API/private HTML), e2e "PWA manifest is linked" |
+| Android/iOS store wrappers | implemented (unsigned builds) | `capacitor.config.ts` (loads `CAP_SERVER_URL`), `android/`, `ios/`, `mobile.yml` (debug APK artifact; iOS simulator build), `fastlane/Fastfile` lanes gated on signing secrets |

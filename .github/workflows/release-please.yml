@@ -10,6 +10,9 @@ permissions:
 
 jobs:
   release-please:
+    # Enable after turning on Settings → Actions → "Allow GitHub Actions to create and approve pull requests"
+    # and setting the repository variable RELEASE_PLEASE_ENABLED=true (until then this job is skipped, not failed).
+    if: vars.RELEASE_PLEASE_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
       # Maintains a release PR with CHANGELOG.md from conventional commits. Merging it creates the vX.Y.Z tag,
