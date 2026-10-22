@@ -77,6 +77,8 @@ export async function bookGroupSeat(db: DB, actor: Principal, sessionId: string,
       // Release expired holds on this session before counting.
       const stale = await tx.select({ id: bookings.id }).from(bookings).where(and(eq(bookings.groupSessionId, s.id), inArray(bookings.status, ["slot_held", "awaiting_payment"]), lt(bookings.holdExpiresAt, now)));
       if (stale.length) await expireStaleHolds(tx, { teacherId: s.teacherId });
+      const [mine] = await tx.select({ id: bookings.id }).from(bookings).where(and(eq(bookings.groupSessionId, s.id), eq(bookings.studentId, actor.id), inArray(bookings.status, [...SEAT_STATUSES])));
+      if (mine) throw new AppError("CONFLICT", "You already hold a seat in this session.");
       const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(bookings).where(and(eq(bookings.groupSessionId, s.id), inArray(bookings.status, [...SEAT_STATUSES])));
       if (n >= s.capacity) throw new AppError("SLOT_UNAVAILABLE", "This group session is full.");
       const [b] = await tx.insert(bookings).values({
