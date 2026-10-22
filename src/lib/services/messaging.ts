@@ -2,10 +2,12 @@
  * Messaging. Conversations exist only between a student and a teacher who share a booking
  * (anti-spam rule). Membership is verified on every read/write; blocked members cannot send.
  */
-import { and, desc, eq, gt, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { DB } from "../db";
-import { bookings, conversationMembers, conversations, messages, profiles, teacherProfiles } from "../db/schema";
+import { bookings, conversationMembers, conversations, messageAttachments, messages, profiles, teacherProfiles } from "../db/schema";
+import { MAX_UPLOAD_BYTES, putPrivateFile, safeFileName, sniffFile } from "../storage";
 import { AppError } from "../errors";
 import type { Principal } from "../auth/permissions";
 import { notify } from "./notify";
@@ -80,4 +82,43 @@ export async function conversationHeader(db: DB, actor: Principal, conversationI
   const [o] = await db.select({ name: profiles.displayName, blockedAt: conversationMembers.blockedAt }).from(conversationMembers).innerJoin(profiles, eq(profiles.userId, conversationMembers.userId))
     .where(and(eq(conversationMembers.conversationId, conversationId), ne(conversationMembers.userId, actor.id)));
   return { otherName: o?.name ?? "—", iBlocked: !!me.blockedAt, blocked: !!me.blockedAt || !!o?.blockedAt };
+}
+
+// ------------------------------------------------------------------ attachments
+export const ATTACHMENT_TYPES = ["pdf", "png", "jpg", "webp"] as const;
+
+/**
+ * Sends a message with one attachment. Type is decided from magic bytes (PDF/PNG/JPEG/WebP), size ≤ 5 MB, stored in
+ * private storage under a random key; downloads go through a membership-checked route.
+ */
+export async function sendAttachment(db: DB, actor: Principal, conversationId: string, file: { name: string; bytes: Buffer }, caption?: string) {
+  if (file.bytes.length === 0) throw new AppError("VALIDATION_FAILED", "Empty file.");
+  if (file.bytes.length > MAX_UPLOAD_BYTES) throw new AppError("VALIDATION_FAILED", "File too large (max 5 MB).");
+  const kind = sniffFile(file.bytes, ATTACHMENT_TYPES);
+  if (!kind) throw new AppError("VALIDATION_FAILED", "Only PDF, PNG, JPEG or WebP files can be attached.");
+  const name = safeFileName(file.name, kind.ext);
+  const key = `messages/${conversationId}/${randomUUID()}.${kind.ext}`;
+  // Membership/blocking/rate limits are enforced by sendMessage before anything is stored.
+  const m = await sendMessage(db, actor, conversationId, (caption?.trim() || `📎 ${name}`).slice(0, 4000));
+  await putPrivateFile(key, file.bytes);
+  const [a] = await db.insert(messageAttachments).values({ messageId: m.id, conversationId, uploaderId: actor.id, storageKey: key, mime: kind.mime, sizeBytes: file.bytes.length, originalName: name }).returning();
+  return { message: m, attachment: { id: a.id, name, mime: a.mime, sizeBytes: a.sizeBytes } };
+}
+
+export async function getAttachmentForMember(db: DB, actor: Principal, attachmentId: string) {
+  const [a] = await db.select().from(messageAttachments).where(eq(messageAttachments.id, attachmentId));
+  if (!a) throw new AppError("NOT_FOUND", "Attachment not found.");
+  await membership(db, actor.id, a.conversationId);
+  return a;
+}
+
+export async function attachmentsFor(db: DB, messageIds: string[]) {
+  if (!messageIds.length) return [];
+  return db.select({ id: messageAttachments.id, messageId: messageAttachments.messageId, name: messageAttachments.originalName, mime: messageAttachments.mime, sizeBytes: messageAttachments.sizeBytes })
+    .from(messageAttachments).where(inArray(messageAttachments.messageId, messageIds));
+}
+
+/** Exposed for the realtime stream: throws NOT_FOUND unless the user is a member. */
+export async function assertMember(db: DB, userId: string, conversationId: string) {
+  await membership(db, userId, conversationId);
 }
