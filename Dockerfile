@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Multi-stage production image: Next.js standalone output, non-root user, migrations bundled.
 
-FROM node:22-bookworm-slim AS base
+FROM node:25-bookworm-slim AS base
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
 WORKDIR /app
@@ -22,7 +22,7 @@ RUN pnpm build && bash scripts/prepare-standalone.sh
 RUN pnpm dlx esbuild@0.25.11 scripts/migrate.ts --bundle --platform=node --format=esm --outfile=.next/standalone/migrate.mjs \
       --banner:js="import { createRequire } from 'module'; const require = createRequire(import.meta.url);"
 
-FROM node:22-bookworm-slim AS runner
+FROM node:25-bookworm-slim AS runner
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 STORAGE_DIR=/data/private
 WORKDIR /app
 RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs nextjs \
