@@ -24,6 +24,12 @@ const schema = z.object({
   MAPBOX_ACCESS_TOKEN: optional,
   MAPBOX_PERMANENT_GEOCODING: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   NOMINATIM_CONTACT_EMAIL: optional,
+  /** Admin/support TOTP two-factor. Defaults to required in production, optional elsewhere. */
+  ADMIN_MFA_REQUIRED: z.enum(["true", "false"]).optional().transform((v) => (v === undefined ? undefined : v === "true")),
+  /** Optional error monitoring (Sentry-compatible DSN). Nothing is sent when unset. */
+  SENTRY_DSN: optional,
+  SENTRY_ENVIRONMENT: optional,
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   RESEND_API_KEY: optional,
   EMAIL_FROM: optional,
 });
@@ -48,6 +54,11 @@ export function env(): Env {
 /** For tests only. */
 export function resetEnvCache() { cached = undefined; }
 
+export function adminMfaRequired(): boolean {
+  const e = env();
+  return e.ADMIN_MFA_REQUIRED ?? e.NODE_ENV === "production";
+}
+
 export function providerStatus() {
   const e = env();
   return {
@@ -57,5 +68,6 @@ export function providerStatus() {
     geocoding: e.MAPBOX_ACCESS_TOKEN ? ("mapbox" as const) : e.NOMINATIM_CONTACT_EMAIL ? ("nominatim" as const) : null,
     email: e.RESEND_API_KEY && e.EMAIL_FROM ? ("resend" as const) : null,
     devOutbox: e.ENABLE_DEV_OUTBOX,
+    monitoring: e.SENTRY_DSN ? ("sentry" as const) : null,
   };
 }

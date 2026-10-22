@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { teacherCredentials, teacherProfiles } from "@/lib/db/schema";
 import { route } from "@/lib/api";
-import { requireUser } from "@/lib/auth/session";
+import { needsMfa, requireUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { AppError } from "@/lib/errors";
 import { env } from "@/lib/env";
@@ -17,6 +17,7 @@ export const GET = route<{ id: string }>(async (_req, { params }) => {
   const db = getDb();
   const [row] = await db.select({ c: teacherCredentials, ownerId: teacherProfiles.userId }).from(teacherCredentials).innerJoin(teacherProfiles, eq(teacherProfiles.id, teacherCredentials.teacherId)).where(eq(teacherCredentials.id, id));
   if (!row || !row.c.fileKey || (row.ownerId !== u.id && !can(u, "admin.verify_teachers"))) throw new AppError("NOT_FOUND", "File not found");
+  if (row.ownerId !== u.id && needsMfa(u, "admin.verify_teachers")) throw new AppError("MFA_REQUIRED", "Two-factor verification required.");
   const base = path.resolve(env().STORAGE_DIR);
   const full = path.resolve(base, row.c.fileKey);
   if (!full.startsWith(base + path.sep)) throw new AppError("NOT_FOUND", "File not found");

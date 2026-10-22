@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { ZodError, type ZodType } from "zod";
 import { AppError, isAppError } from "./errors";
 import { log } from "./log";
+import { captureException } from "./monitoring";
 
 export function json<T>(data: T, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
@@ -25,6 +26,10 @@ export function route<P = Record<string, string>>(fn: (req: Request, ctx: Ctx<P>
       if (opts.csrf !== false && !["GET", "HEAD", "OPTIONS"].includes(req.method)) assertSameOrigin(req);
       return await fn(req, ctx);
     } catch (e) {
+      if (!isAppError(e) && !(e instanceof ZodError)) {
+        void captureException(e, { route: new URL(req.url).pathname, method: req.method });
+        return NextResponse.json({ error: { code: "INTERNAL", message: "Something went wrong." } }, { status: 500 });
+      }
       return errorResponse(e);
     }
   };

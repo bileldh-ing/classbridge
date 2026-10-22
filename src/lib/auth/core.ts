@@ -20,6 +20,8 @@ export const SESSION_TTL_DAYS = 30;
 export type SessionUser = {
   id: string; email: string; emailVerified: boolean; status: string; roles: Role[];
   activeRole: Role; displayName: string; locale: string; timezone: string; sessionId: string;
+  /** Admin two-factor state: whether TOTP is enrolled, and whether THIS session passed the TOTP challenge. */
+  mfaEnabled: boolean; mfaVerified: boolean;
 };
 
 export async function signup(db: DB, input: SignupInput, source = "web") {
@@ -96,9 +98,10 @@ export async function getSessionUser(db: DB, token: string | undefined | null): 
   const sid = sha256(token);
   const rows = await db.execute<{
     id: string; email: string; email_verified_at: Date | null; status: string; active_role: Role; display_name: string;
-    locale: string; timezone: string; last_seen_at: Date; roles: Role[] | null;
+    locale: string; timezone: string; last_seen_at: Date; roles: Role[] | null; totp_enabled_at: Date | null; mfa_verified_at: Date | null;
   }>(sql`
     SELECT u.id, u.email, u.email_verified_at, u.status, s.active_role, s.last_seen_at, p.display_name, p.locale, p.timezone,
+      u.totp_enabled_at, s.mfa_verified_at,
       (SELECT array_agg(r.role::text) FROM user_roles r WHERE r.user_id = u.id AND r.status = 'active') AS roles
     FROM sessions s JOIN users u ON u.id = s.user_id JOIN profiles p ON p.user_id = u.id
     WHERE s.id = ${sid} AND s.revoked_at IS NULL AND s.expires_at > now()`);
@@ -112,6 +115,7 @@ export async function getSessionUser(db: DB, token: string | undefined | null): 
   return {
     id: r.id, email: r.email, emailVerified: !!r.email_verified_at, status: r.status, roles, activeRole: active,
     displayName: r.display_name, locale: r.locale, timezone: r.timezone, sessionId: sid,
+    mfaEnabled: !!r.totp_enabled_at, mfaVerified: !!r.totp_enabled_at && !!r.mfa_verified_at,
   };
 }
 

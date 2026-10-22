@@ -7,7 +7,7 @@ import { getDb } from "../db";
 import { getSessionUser, type SessionUser } from "./core";
 import { can, type Permission, type Role } from "./permissions";
 import { AppError } from "../errors";
-import { env } from "../env";
+import { adminMfaRequired, env } from "../env";
 
 export const SESSION_COOKIE = "cb_session";
 
@@ -46,9 +46,15 @@ export async function requireUser(): Promise<SessionUser> {
   return u;
 }
 
+/** Staff permissions require a TOTP-verified session when ADMIN_MFA_REQUIRED (default in production). */
+export function needsMfa(u: SessionUser, p: Permission) {
+  return (p.startsWith("admin.") || p.startsWith("support.")) && adminMfaRequired() && !u.mfaVerified;
+}
+
 export async function requirePermission(p: Permission): Promise<SessionUser> {
   const u = await requireUser();
   if (!can(u, p)) throw new AppError("FORBIDDEN", "You do not have permission to do this.");
+  if (needsMfa(u, p)) throw new AppError("MFA_REQUIRED", u.mfaEnabled ? "Enter your authenticator code to continue." : "Set up two-factor authentication to use staff tools.");
   return u;
 }
 
